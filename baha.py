@@ -15,6 +15,25 @@ def RandomString(K):
     S = "abcdefghijklmnopqrstuvwxyz0123456789"
     return ''.join(random.choice(S) for i in range(K))
 
+def getConfig():
+    with open('config.txt', 'r') as file:
+        contents = file.read()
+        download_path_match = re.search(r'Download Path:\s*(.*)', contents)
+        quality_match = re.search(r'Quality:\s*(\d+)', contents)
+
+        # Extract the download path and quality if found
+        if download_path_match:
+            downloadPath = download_path_match.group(1)
+        else:
+            downloadPath = None
+
+        if quality_match:
+            Quality = quality_match.group(1)
+        else:
+            Quality = None
+
+    return downloadPath, Quality
+
 def checkbox(eps):
     questions = [
         {
@@ -57,7 +76,7 @@ class BahaRequest:
     def baha_parse_episodes(link):
         headers = BahaRequest.headers
         response = requests.get(link, headers=headers)
-        return re.findall(r'"\?sn=(\d{5})">(\d{2}\.?\d?)<', response.text)
+        return re.findall(r'"\?sn=(\d{5})">(\d+\.?\d?)<', response.text)
 
     def baha_link_validate(link):
         linktype = 0 # bad link
@@ -66,14 +85,14 @@ class BahaRequest:
             linktype = 1 # sn
         else: # full link
             if link.find("https://ani.gamer.com.tw/animeVideo.php?sn=")==-1:
-                return 0, ""
+                return 0
             linktype = 2
 
         headers = BahaRequest.headers
         response = requests.get(link, headers=headers)
         if response.text.find("目前無此動畫或動畫授權已到期！")!=-1:
-            return 0, ""
-        return linktype, link
+            return 0
+        return linktype
 
     def baha_download_request(sn, tmpPath, downloadPath, Quality="720"):
         # path initialize
@@ -112,9 +131,10 @@ class BahaRequest:
 
         #Start Ad
         response = ss.get('https://ani.gamer.com.tw/ajax/videoCastcishu.php?sn='+sn+'&s='+ad, headers=headers)
-        print("Wait for 30 sec Ad")
-        for i in trange(30):
+        for i in range(30):
+            print(f"\r{30-i}秒後跳過廣告", end='', flush=True)
             time.sleep(1)
+        print("\n")
 
         #skip ad
         response = ss.get('https://ani.gamer.com.tw/ajax/videoCastcishu.php?sn='+sn+'&s='+ad+'&ad=end', headers=headers)
@@ -185,11 +205,10 @@ class BahaRequest:
             "copy",
             output_file
         ]
-        process = subprocess.Popen(command, shell=False, cwd=input_file[:input_file.rfind("/")])
+        process = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=input_file[:input_file.rfind("/")])
         process.wait()
         if process.poll() is not None:
             process.terminate()
-        print("finish")
 
         #remove tmp files
         shutil.rmtree(tmpPath)
@@ -197,20 +216,20 @@ class BahaRequest:
 if __name__=='__main__':
 
     linktype = 0
-    link = ''
     while(linktype==0):
         link = input("輸入連結(全部下載)或sn(單集下載):")
-        linktype, link = BahaRequest.baha_link_validate(link)
-    title = BahaRequest.baha_get_title(link, False)
+        linktype = BahaRequest.baha_link_validate(link)
 
     # config
-    tmpPath = "C:/Users/x/Desktop/cs/baha/Tmp"
-    downloadPath = "C:/Users/"+os.getlogin()+"/Downloads/Video"
-    Quality = "720"
+    tmpPath = (os.getcwd()+"/Tmp").replace('\\','/')
+    downloadPath, Quality = getConfig()
+    # downloadPath = "C:/Users/"+os.getlogin()+"/Downloads/Video"
+    # Quality = "720"
 
     if linktype==1:
         BahaRequest.baha_download_request(link, tmpPath, downloadPath, Quality)
     elif linktype==2:
+        title = BahaRequest.baha_get_title(link, False)
         downloadPath = downloadPath + '/' + title
         eps = BahaRequest.baha_parse_episodes(link)
         eps = checkbox(eps)
