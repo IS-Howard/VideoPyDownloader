@@ -10,6 +10,7 @@ import subprocess
 from tqdm import trange
 import shutil
 from PyInquirer import prompt, Separator
+import pickle
 
 def RandomString(K):
     S = "abcdefghijklmnopqrstuvwxyz0123456789"
@@ -56,7 +57,7 @@ def checkbox(eps):
 class BahaRequest:
 
     headers = {
-        'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36',
+        'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36',
         'Referer': 'https://ani.gamer.com.tw/',
         'origin': 'https://ani.gamer.com.tw'
     }
@@ -94,6 +95,35 @@ class BahaRequest:
             return 0
         return linktype
 
+    def baha_set_session():
+        ss = requests.Session()
+
+        if os.path.isfile('./cookie.sav'):
+            cookie_set = 2
+        else:
+            cookie_set = 1
+        
+        if cookie_set == 1:   # load from chrome
+            try:
+                cookies = browser_cookie3.chrome(domain_name='gamer.com')
+                ss.cookies = cookies
+                pickle.dump(requests.utils.dict_from_cookiejar(cookies), open('./cookie.sav',"wb"))
+            except:
+                print("Error when loading cookies, please make sure tuning off chrome first!")
+                return None
+        elif cookie_set == 2: # load request cookie file
+            # cookies = pickle.load(open('./cookie.sav', "rb"))
+            # for cookie in cookies:
+            #     if 'httpOnly' in cookie:
+            #         httpO = cookie.pop('httpOnly')
+            #         cookie['rest'] = {'httpOnly': httpO}
+            #     if 'expiry' in cookie:
+            #         cookie['expires'] = cookie.pop('expiry')
+            #     # ss.cookies.set(**cookie)
+            #     ss.cookies.set(cookie['name'], cookie['value'], path=cookie['path'])
+            ss.cookies = requests.utils.cookiejar_from_dict(pickle.load(open('./cookie.sav','rb')))
+        return ss
+            
     def baha_download_request(sn, tmpPath, downloadPath, Quality="720"):
         # path initialize
         tmpPath = tmpPath+'/tmp'+sn
@@ -104,9 +134,9 @@ class BahaRequest:
 
         # request config and cookie
         headers = BahaRequest.headers
-        cookies = browser_cookie3.chrome(domain_name='gamer.com')
-        ss = requests.Session()
-        ss.cookies = cookies
+        ss = BahaRequest.baha_set_session()
+        if not ss:
+            return
 
         #Get Title
         title = BahaRequest.baha_get_title(sn)
@@ -120,7 +150,10 @@ class BahaRequest:
         #Access
         response = ss.get('https://ani.gamer.com.tw/ajax/token.php?adID=undefined&sn='+sn+ "&device="+deviceID+"&hash="+RandomString(12), headers=headers)
         if(response.text.find("error")!=-1):
+            print(response.text)
             print("Access Fail")
+            #remove tmp files
+            shutil.rmtree(tmpPath)
             return
 
         #Get Ad
@@ -159,6 +192,8 @@ class BahaRequest:
                     break
         if Res == '':
             print("Parse List Fail")
+            #remove tmp files
+            shutil.rmtree(tmpPath)
             return
         
         #Tmp saving (list, key, chunks) setup
@@ -188,6 +223,8 @@ class BahaRequest:
                 for schunk in response.iter_content(chunk_size=1024):
                     if chunk:
                         file.write(schunk)
+        cookiesave = requests.utils.dict_from_cookiejar(ss.cookies)
+        pickle.dump(cookiesave, open('./cookie.sav',"wb"))
 
         #ffmpeg convert
         print("mp4 converting..")
