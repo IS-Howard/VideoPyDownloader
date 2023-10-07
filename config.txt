@@ -1,2 +1,3 @@
 Download Path: C:/Users/x/Downloads/Video
 Quality: 720
+Chrome Profile: Profile 2
