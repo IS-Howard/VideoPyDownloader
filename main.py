@@ -53,6 +53,29 @@ def CheckBox(eps):
             sel_eps.append(eps[i][0])
     return sel_eps
 
+def MP4convert(m3u8_file, mp4_file, ffmpeg_path=None):
+    print("mp4 generating..")
+    if not ffmpeg_path:
+        ffmpeg_path = os.getcwd()+"/ffmpeg.exe"
+    input_file = m3u8_file.replace('\\','/')
+    output_file = mp4_file.replace('\\','/')
+
+    command = [
+        ffmpeg_path,
+        "-allowed_extensions",
+        "ALL",
+        "-y",
+        "-i",
+        input_file,
+        "-c",
+        "copy",
+        output_file
+    ]
+    process = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=input_file[:input_file.rfind("/")])
+    process.wait()
+    if process.poll() is not None:
+        process.terminate()
+
 class Baha:
 
     headers = {
@@ -169,13 +192,13 @@ class Baha:
         #skip ad
         response = ss.get('https://ani.gamer.com.tw/ajax/videoCastcishu.php?sn='+sn+'&s='+ad+'&ad=end', headers=headers)
 
-        #Get video m3u8 link
+        #Get video m3u8 link start
         response = ss.get('https://ani.gamer.com.tw/ajax/videoStart.php?sn='+sn, headers=headers)
         response = ss.get('https://ani.gamer.com.tw/ajax/m3u8.php?sn='+sn+'&device='+deviceID, headers=headers)
         load = json.loads(response.text)
         MUrl = load["src"]
 
-        #Parse m3u8 list
+        #Get link of M3U8 list
         response = ss.get(MUrl, headers=headers)
         sr = response.text
         lines = sr.split('\n')
@@ -188,12 +211,12 @@ class Baha:
                     Res = nextLine.split('?')[0].strip()
                     break
         if Res == '':
-            print("Parse List Fail")
+            print("Get List Link Fail")
             #remove tmp files
             shutil.rmtree(tmpPath)
             return
         
-        #Tmp saving (list, key, chunks) setup
+        #M3U8 setup
         MUrl = MUrl[:MUrl.find("playlist_basic.m3u8")] + Res
         tmpName = Res[Res.rindex('/') + 1:]
         tmpFile = tmpPath + '/' + tmpName
@@ -211,7 +234,7 @@ class Baha:
                 if chunk:
                     file.write(chunk)
 
-        #Save chunks
+        #Save .ts files
         print("Donloading..")
         for i in trange(len(chunklist)):
             chunk = chunklist[i]
@@ -224,25 +247,7 @@ class Baha:
         pickle.dump(cookiesave, open(Baha.cookie_file,"wb"))
 
         #ffmpeg convert
-        print("mp4 converting..")
-        ffmpeg_path = os.getcwd()+"/ffmpeg.exe"
-        input_file = (tmpPath + "/" + tmpName).replace('\\','/')
-        output_file = downloadPath +'/'+ title + ".mp4"
-        command = [
-            ffmpeg_path,
-            "-allowed_extensions",
-            "ALL",
-            "-y",
-            "-i",
-            input_file,
-            "-c",
-            "copy",
-            output_file
-        ]
-        process = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=input_file[:input_file.rfind("/")])
-        process.wait()
-        if process.poll() is not None:
-            process.terminate()
+        MP4convert(tmpPath + "/" + tmpName, downloadPath +'/'+ title + ".mp4")
 
         #remove tmp files
         shutil.rmtree(tmpPath)
