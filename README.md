@@ -1,6 +1,6 @@
 # 簡介
 
-巴哈姆特動畫瘋下載工具
+影片下載工具 For [動畫瘋](https://ani.gamer.com.tw/), [Anime1](https://anime1.me/)
 
 
 
