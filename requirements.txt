@@ -2,4 +2,5 @@ browser-cookie3==0.18.2
 PyInquirer==1.0.3
 requests==2.31.0
 tqdm==4.65.0
-
+selenium==4.13.0
+bs4==0.0.1

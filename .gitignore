@@ -1,4 +1,5 @@
-ffmpeg.exe
+/Tmp/ffmpeg.exe
+/Tmp/chromedriver.exe
 __pycache__
 /Tmp/Cookie1
 gimy

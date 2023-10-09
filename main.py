@@ -1,21 +1,31 @@
 import requests
 import browser_cookie3
+import urllib.request
+from bs4 import BeautifulSoup as bs
+
 import json
+import re
+
 import random
 from datetime import datetime
-import re
 import time
 import os
-import subprocess
-from tqdm import tqdm,trange
 import shutil
-from PyInquirer import prompt
 import pickle
-from bs4 import BeautifulSoup as bs
-import urllib.request
+
+from tqdm import tqdm,trange
+from PyInquirer import prompt
+
+import subprocess
+import concurrent.futures
+import threading
+
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+#from selenium.webdriver.common.desired_capabilities import DesiredCapabilities # old selenium
 
 def Get_Config():
-    with open('config.txt', 'r') as file:
+    with open('config', 'r') as file:
         contents = file.read()
         download_path_match = re.search(r'Download Path:\s*(.*)', contents) # downloadPath = "C:/Users/"+os.getlogin()+"/Downloads/Video"
         quality_match = re.search(r'Quality:\s*(\d+)', contents)
@@ -31,8 +41,9 @@ def Get_Config():
 def Get_Link_Type(link,chromeP='Default'):
     if link.find("anime1.me")!=-1: #anime1 0(bad) 3(sn) 4(full)
         return Anime1.Link_Validate(link,chromeP)
+    elif link.find("gimy.su")!=-1 or link.find("gimy.ai")!=-1: #gimy 0(bad) 5(sn) 6(full)
+        return Gimy.Link_Validate(link)
     return Baha.Link_Validate(link) #baha 0(bad) 1(sn) 2(full)
-
 
 def CheckBox(eps):
     questions = [
@@ -56,9 +67,10 @@ def CheckBox(eps):
 def MP4convert(m3u8_file, mp4_file, ffmpeg_path=None):
     print("mp4 generating..")
     if not ffmpeg_path:
-        ffmpeg_path = os.getcwd()+"/ffmpeg.exe"
+        ffmpeg_path = os.getcwd()+"/Tmp/ffmpeg.exe"
     input_file = m3u8_file.replace('\\','/')
     output_file = mp4_file.replace('\\','/')
+    tmp_file = output_file.rsplit('/',1)[0]+'/tmp.mp4'
 
     command = [
         ffmpeg_path,
@@ -69,19 +81,27 @@ def MP4convert(m3u8_file, mp4_file, ffmpeg_path=None):
         input_file,
         "-c",
         "copy",
-        output_file
+        tmp_file
     ]
-    process = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=input_file[:input_file.rfind("/")])
-    process.wait()
-    if process.poll() is not None:
-        process.terminate()
+    try:
+        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=os.getcwd())
+        stdout, stderr = process.communicate()
+
+        if process.returncode != 0:
+            print("FFmpeg process returned an error code:", process.returncode)
+            print("FFmpeg Output:", stdout.decode())
+            print("FFmpeg Error:", stderr.decode())
+        os.rename(tmp_file, output_file)
+        print("Finish!\n")
+        return False # no error
+    except Exception as e:
+        print("Error running FFmpeg:", str(e))
+        return True # error
 
 class Baha:
 
     headers = {
-        'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36',
-        'Referer': 'https://ani.gamer.com.tw/',
-        'origin': 'https://ani.gamer.com.tw'
+        'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36'
     }
 
     cookie_file = './Tmp/Cookie1'
@@ -247,12 +267,13 @@ class Baha:
         pickle.dump(cookiesave, open(Baha.cookie_file,"wb"))
 
         #ffmpeg convert
-        MP4convert(tmpPath + "/" + tmpName, downloadPath +'/'+ title + ".mp4")
+        if MP4convert(tmpPath + "/" + tmpName, downloadPath +'/'+ title + ".mp4"):
+            return
 
         #remove tmp files
         shutil.rmtree(tmpPath)
 
-class Anime1():
+class Anime1:
 
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36'}
     headers2 = {'Content-Type': 'application/x-www-form-urlencoded','User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36'}
@@ -377,11 +398,211 @@ class Anime1():
                 bytes_so_far += len(chunk)
                 pbar.update(len(chunk))
 
+class Gimy:
+    def Link_Validate(site):
+        title, link = Gimy.Get_Title_Link(site,False)
 
+        if title==None or link==None:
+            print('err: None')
+            return 0
         
+        if title=='404 not found' or title=='System Error':
+            print("err: Bad!")
+            return 0
+        
+        if link==1:
+            return 5
+        
+        if link==2:
+            return 6
+        
+        return 0
 
+    def Get_Title_Link(site, get_link=True):
+        response = requests.get(site)
+        soup = bs(response.text, 'html.parser')
 
+        title_tag = soup.find('title')
+        title = title_tag.text if title_tag else None
+        if not title:
+            return None, None
 
+        prefix = "https://gimy.ai" if "gimy.ai" in site else "https://gimy.su"
+        if title.find("線上看")!=-1:
+        # return title with all eps' links
+            title = title.split('線上看')[0] #main
+            if get_link:
+                yun_all = soup.find_all('a', class_='gico')
+                yun_name = [x.text for x in yun_all]
+                print('\n'.join([f"{i}.{y}" for i, y in enumerate(yun_name, 1)]))
+                try:
+                    sel = input(f"選擇來源(1~{len(yun_all)}): ")
+                    sel = int(sel)-1
+                    yun = yun_all[sel]
+                    ele_list =  yun.find_parent().find_next_sibling().find_all('a')
+                    links = [prefix+x['href'] for x in ele_list]
+                    lst = [x.get_text() for x in ele_list]
+                    if sum(lst[i] >= lst[i + 1] for i in range(len(lst) - 1)) > len(lst)//2: #loose decending ordered
+                        links.reverse()
+                except:
+                    print("Bad!")
+                    return None, None
+            else:
+                links = 2
+        else:
+        # return sigle eq tile and api link
+            title = title.split(' - ')[0] #ep
+            links = Gimy.Get_MUrl(site) if get_link else 1
+
+        return title, links
+    
+    def Get_MUrl(link):
+
+        try:
+            target = None
+            if "gimy.su" in link:
+                response = requests.get(link)
+                match = re.search(r'"url":"([^"]+.m3u8)"',response.text)
+                target = match.group(1) if match else None
+            elif "gimy.ai" in link:
+                # use selenium to render javascript and get m3u8 link
+                chrome_options = webdriver.chrome.options.Options()
+                chrome_options.add_argument("--log-level=3")
+                chrome_options.add_argument('--headless')
+                chrome_options.set_capability('goog:loggingPrefs', { 'browser':'ALL' })
+                #d = DesiredCapabilities.CHROME # old selenium
+                #d['goog:loggingPrefs'] = { 'browser':'ALL' } # old selenium
+                driver_service = webdriver.chrome.service.Service(executable_path=r"./Tmp/chromedriver.exe")
+                #driver = webdriver.Chrome(service=driver_service, options=chrome_options,desired_capabilities=d) # old selenium
+                driver = webdriver.Chrome(service=driver_service, options=chrome_options)
+                driver.get(link)
+                iframe_element = driver.find_element(By.CSS_SELECTOR,'iframe[src*="jcplayer"]')
+                driver.switch_to.frame(iframe_element)
+                entry = driver.get_log('browser')[-1]
+                match = re.search(r'"(https[^"]+\.m3u8)"',entry['message'])
+                if match:
+                    target = match.group(1)
+                driver.quit()
+                print('\n')
+            if not target:
+                return None
+            target = target.replace("\\", '')
+
+            response = requests.get(target)
+            match = re.search(r".*\.m3u8", response.text, re.MULTILINE)
+            if not match:
+                return target
+            hls_line = match.group()
+            target = target.replace("/index.m3u8","")
+            for s in hls_line.split('/'):
+                if s not in target:
+                    target+='/'+s
+            return target
+        except:
+            return None
+        
+    def download_chunk(chunk, index, savepath, progress_bar=None, lock=None, showerr=True):
+        try:
+            response = requests.get(chunk, stream=True)
+            if response.status_code == 200:
+                with open(f"{savepath}/{index}.ts", 'wb') as file:
+                    for schunk in response.iter_content(chunk_size=1024):
+                        if schunk:
+                            file.write(schunk)
+            else:
+                if showerr:
+                    print(f"Failed to download chunk {index}. Status code: {response.status_code}")
+                
+            if progress_bar:
+                with lock:
+                    progress_bar.update(1)
+        except Exception as e:
+            print(f"Error downloading chunk {index}: {str(e)}")
+
+    def Download_Request(site, tmpPath, downloadPath, max_threads=15):
+        #path
+        tmpPath = tmpPath+'/gimy'
+        tmpfile = tmpPath+'/0.m3u8'
+        if not os.path.isdir(tmpPath):
+            os.makedirs(tmpPath)
+        if not os.path.isdir(downloadPath):
+            os.makedirs(downloadPath)
+
+        title, link = Gimy.Get_Title_Link(site)
+        if not link or not title:
+            print("Connection Failed. Source may be invalid!\n")
+            return False
+        print(title)
+
+        # m3u8 link
+        response = requests.get(link)
+        chunklist = re.findall(r'.+\.ts',response.text)
+
+        #not support yet
+        if "tucheng5566" in link:
+            print("Source not supported yet! Please select another source.\n")
+            return False
+
+        # check m3u8 key
+        match = re.search(r'URI="([^"]+)"', response.text)
+        if match:
+            keyURI = match.group(1)
+        else:
+            keyURI = None
+
+        # save m3u8 list
+        with open(tmpPath+'/original.m3u8','w') as file:
+            file.write(response.text)
+        chunk_sav = '' 
+        i=0
+        for line in response.text.split('\n'):
+            if line.endswith(".ts"):
+                chunk_sav += str(i)+'.ts'
+                i+=1
+            else:
+                if keyURI and keyURI in line:
+                    line = line.replace(keyURI,'/key.key')
+                chunk_sav += line
+            chunk_sav += '\n'
+        with open(tmpfile,"w") as file:
+            file.write(chunk_sav)
+
+        # chunk link prefix?
+        if not "http" in chunklist[0]:
+            sep = link.split('/')
+            prefix = 'https:/'
+            for i in range(2,len(sep)-1):
+                prefix =prefix+'/'+sep[i] if sep[i] not in chunklist[0] else prefix
+            chunklist = [prefix+'/'+x for x in chunklist]
+        # Download key?
+        if keyURI:
+            response = requests.get(prefix+keyURI, stream=True)
+            with open(tmpPath+'/key.key','wb') as file:
+                for chunk in response.iter_content(chunk_size=1024):
+                    if chunk:
+                        file.write(chunk)
+
+        # Download from m3u8 link
+        with concurrent.futures.ThreadPoolExecutor(max_threads) as executor:
+            total_chunks = len(chunklist)
+            progress_bar = tqdm(total=total_chunks, desc="Download Progress", unit="chunk")
+
+            lock = threading.Lock() # Mutex lock for updating the progress bar
+
+            for index, chunk_url in enumerate(chunklist):
+                executor.submit(lambda url=chunk_url, index=index: Gimy.download_chunk(url, index, tmpPath, progress_bar, lock))
+
+            # Wait for all tasks to complete
+            executor.shutdown()
+            progress_bar.close()
+
+        #ffmpeg convert
+        if MP4convert(tmpfile, downloadPath +'/'+ title + ".mp4"):
+            return False
+
+        #remove tmp files
+        shutil.rmtree(tmpPath)
+        return True
 
 if __name__=='__main__':
 
@@ -397,7 +618,12 @@ if __name__=='__main__':
 
 
     while(go):
-        link = input("輸入連結(全部下載)或sn(單集下載):")
+        print("----------------------------------------")
+        print("Baha-完整連結(全部下載)或sn(單集)")
+        print("Anime1-頁面網址(全部)或(單集)")
+        print("Gimy-頁面網址(全部)或(單集)")
+        print("----------------------------------------")
+        link = input("輸入:")
         if link=='exit':
             break
         linktype = Get_Link_Type(link,chromeP)
@@ -421,5 +647,28 @@ if __name__=='__main__':
             eps = CheckBox(eps)
             for ep in eps:
                 Anime1.Download_Request(ep, downloadPath, chromeP)
+        elif linktype==5:
+            Gimy.Download_Request(link, tmpPath, downloadPath)
+        elif linktype==6:
+            title, eps = Gimy.Get_Title_Link(link)
+            try:
+                downloadPath = downloadPath + '/' + title + '/'
+                print(f"總共有{len(eps)}集")
+                getall = input("全部下載(y/n): ")
+                if getall=='n' or getall=='N':
+                    st = int(input(f"從第幾集開始?(1~{len(eps)}): "))
+                    ed = int(input(f"下載到第幾集?({st+1}~{len(eps)}): "))
+                    st-=1
+                else:
+                    st=0
+                    ed=len(eps)
+                for i in range(st,ed):
+                    if not Gimy.Download_Request(eps[i], tmpPath, downloadPath):
+                        break
+            except:
+                print("Bad!")
+
+
+
 
     
