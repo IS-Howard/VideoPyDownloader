@@ -164,9 +164,9 @@ class Baha:
             ss.cookies = requests.utils.cookiejar_from_dict(pickle.load(open(Baha.cookie_file,'rb')))
         return ss
             
-    def Download_Request(sn, tmpPath, downloadPath, Quality="720", chromeP="Default"):
+    def Download_Request(sn, TMP, downloadPath, Quality="720", chromeP="Default"):
         # path initialize
-        tmpPath = tmpPath+'/tmp'+sn
+        tmpPath = TMP+'/tmp'+sn
         if not os.path.isdir(tmpPath):
             os.makedirs(tmpPath)
         if not os.path.isdir(downloadPath):
@@ -519,9 +519,9 @@ class Gimy:
         except Exception as e:
             print(f"Error downloading chunk {index}: {str(e)}")
 
-    def Download_Request(site, tmpPath, downloadPath, max_threads=15):
+    def Download_Request(site, TMP, downloadPath, max_threads=15):
         #path
-        tmpPath = tmpPath+'/gimy'
+        tmpPath = TMP+'/gimy'
         tmpfile = tmpPath+'/0.m3u8'
         if not os.path.isdir(tmpPath):
             os.makedirs(tmpPath)
@@ -607,7 +607,7 @@ class Gimy:
 if __name__=='__main__':
 
     # config
-    tmpPath = (os.getcwd()+"/Tmp").replace('\\','/')
+    TMP = (os.getcwd()+"/Tmp").replace('\\','/')
     downloadPath, Quality, chromeP = Get_Config()
 
     go = True
@@ -631,14 +631,14 @@ if __name__=='__main__':
             continue
 
         if linktype==1:
-            Baha.Download_Request(link, tmpPath, downloadPath, Quality, chromeP)
+            Baha.Download_Request(link, TMP, downloadPath, Quality, chromeP)
         elif linktype==2:
             title = Baha.Get_Title(link, False)
             downloadPath = downloadPath + '/' + title
             eps = Baha.Parse_Episodes(link)
             eps = CheckBox(eps)
             for ep in eps:
-                Baha.Download_Request(ep, tmpPath, downloadPath, Quality, chromeP)
+                Baha.Download_Request(ep, TMP, downloadPath, Quality, chromeP)
         elif linktype==3:
             Anime1.Download_Request(link, downloadPath, chromeP)
         elif linktype==4:
@@ -648,7 +648,7 @@ if __name__=='__main__':
             for ep in eps:
                 Anime1.Download_Request(ep, downloadPath, chromeP)
         elif linktype==5:
-            Gimy.Download_Request(link, tmpPath, downloadPath)
+            Gimy.Download_Request(link, TMP, downloadPath)
         elif linktype==6:
             title, eps = Gimy.Get_Title_Link(link)
             try:
@@ -663,7 +663,7 @@ if __name__=='__main__':
                     st=0
                     ed=len(eps)
                 for i in range(st,ed):
-                    if not Gimy.Download_Request(eps[i], tmpPath, downloadPath):
+                    if not Gimy.Download_Request(eps[i], TMP, downloadPath):
                         break
             except:
                 print("Bad!")
