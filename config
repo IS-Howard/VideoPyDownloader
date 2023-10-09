@@ -1,5 +1,5 @@
-Download Path: C:/Users/x/Downloads/Video
+Download Path: ./Video
 Quality: 720
-Chrome Profile: Profile 2
+Chrome Profile: Default
 python venvDir: Tmp\venv
-Init: done
+

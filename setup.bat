@@ -4,7 +4,7 @@ setlocal enabledelayedexpansion
 :: Check if Python is installed
 python --version >nul 2>&1
 if %errorlevel% neq 0 (
-    python
+    echo https://www.microsoft.com/store/productid/9MSSZTT1N39L?ocid=pdpshare
     pause
     exit /b 1
 )
