@@ -1,24 +1,25 @@
 # 簡介
 
-影片下載工具 For [動畫瘋](https://ani.gamer.com.tw/), [Anime1](https://anime1.me/)
+影片下載工具 For [動畫瘋](https://ani.gamer.com.tw/), [Anime1](https://anime1.me/), [Gimy1](https://gimy.ai/), [Gimy2](https://gimy.su/)
 
 
 
 
 
-## 安裝方法
+## 安裝
 
-需要下載 [FFmpeg解碼器](https://ffmpeg.zeranoe.com/builds/) 放置到主程式同一資料夾裡 
+下載 [解碼器](https://drive.google.com/file/d/1UmGVzMtpJCvQBaoJNBD4uEBboTu1jGTw/view?usp=drive_link) 放置到主程式內的Tmp資料夾裡 
+下載 [驅動器](https://drive.google.com/file/d/17-Tu7rckzNw1xfyVg2Ds1lODabJVECRW/view?usp=drive_link) 放置到主程式內的Tmp資料夾裡 
 
-需要建立python環境，安裝套件 **pip install -r requirements.txt**
+執行**'setup.bat'** (安裝python及環境)
 
   
 
 ## 使用方法
 
-1. 需要先在Google Chrome登入動畫瘋  (運行時會自動取得Google Chrome的Cookies)
-2. 打開config.txt，設定下載路徑和下載畫質
-3. 指令執行**'python baha.py'**或是修改**'run.bat'**檔內的環境位置後執行
+1. 先在Chrome登入網站後關閉Chrome
+2. 記事本打開config，設定下載路徑和下載畫質 (optional)
+3. 執行**'run.bat'**
 
 
 
