@@ -4,6 +4,7 @@ setlocal enabledelayedexpansion
 :: Check if Python is installed
 python --version >nul 2>&1
 if %errorlevel% neq 0 (
+    echo Please download python with version under 3.9 first
     echo https://www.microsoft.com/store/productid/9MSSZTT1N39L?ocid=pdpshare
     pause
     exit /b 1
@@ -16,7 +17,7 @@ if not exist "%configFile%" (
     pause
     exit /b 1
 )
-
+:: venvDir
 for /f "tokens=*" %%a in ('type "%configFile%"') do (
     set "line=%%a"
     if "!line:~0,15!" == "python venvDir:" (
@@ -53,7 +54,13 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
-echo Init: done>>"%configFile%"
+:: Set config Init value to Y
+(for /f "delims=" %%a in ('type "%configFile%"') do (
+    set "line=%%a"
+    echo !line:Init: N=Init: Y!
+)) >"%configFile%.temp"
+
+move /y "%configFile%.temp" "%configFile%" >nul
 
 endlocal
 pause
