@@ -20,7 +20,8 @@ import subprocess
 import concurrent.futures
 import threading
 
-from selenium import webdriver
+from seleniumwire import webdriver
+from selenium.webdriver.chrome.service import Service as ChromeService
 from selenium.webdriver.common.by import By
 #from selenium.webdriver.common.desired_capabilities import DesiredCapabilities # old selenium
 
@@ -467,22 +468,20 @@ class Gimy:
                 target = match.group(1) if match else None
             elif "gimy.ai" in link:
                 # use selenium to render javascript and get m3u8 link
-                chrome_options = webdriver.chrome.options.Options()
+                chrome_options = webdriver.ChromeOptions()
                 chrome_options.add_argument("--log-level=3")
                 chrome_options.add_argument('--headless')
-                chrome_options.set_capability('goog:loggingPrefs', { 'browser':'ALL' })
-                #d = DesiredCapabilities.CHROME # old selenium
-                #d['goog:loggingPrefs'] = { 'browser':'ALL' } # old selenium
-                driver_service = webdriver.chrome.service.Service(executable_path=r"./Tmp/chromedriver.exe")
-                #driver = webdriver.Chrome(service=driver_service, options=chrome_options,desired_capabilities=d) # old selenium
+                driver_service = ChromeService(executable_path=r"./Tmp/chromedriver.exe")
                 driver = webdriver.Chrome(service=driver_service, options=chrome_options)
                 driver.get(link)
-                iframe_element = driver.find_element(By.CSS_SELECTOR,'iframe[src*="jcplayer"]')
-                driver.switch_to.frame(iframe_element)
-                entry = driver.get_log('browser')[-1]
-                match = re.search(r'"(https[^"]+\.m3u8)"',entry['message'])
-                if match:
-                    target = match.group(1)
+                start_time=time.time()
+                while not target: # wait for the request for 30s
+                    if time.time()-start_time>15:
+                        break
+                    for req in driver.requests:
+                        if req.response and req.url.endswith(".m3u8") and (req.response.status_code==200):
+                            target=req.url
+                            break
                 driver.quit()
                 print('\n')
             if not target:
@@ -538,11 +537,6 @@ class Gimy:
         # m3u8 link
         response = requests.get(link)
         chunklist = re.findall(r'.+\.ts',response.text)
-
-        #not support yet
-        if "tucheng5566" in link:
-            print("Source not supported yet! Please select another source.\n")
-            return False
 
         # check m3u8 key
         match = re.search(r'URI="([^"]+)"', response.text)
