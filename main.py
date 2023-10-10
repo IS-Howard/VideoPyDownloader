@@ -428,7 +428,7 @@ class Gimy:
             return None, None
 
         prefix = "https://gimy.ai" if "gimy.ai" in site else "https://gimy.su"
-        if title.find("線上看")!=-1:
+        if "vod" in site:
         # return title with all eps' links
             title = title.split('線上看')[0] #main
             if get_link:
@@ -451,7 +451,8 @@ class Gimy:
                 links = 2
         else:
         # return sigle eq tile and api link
-            title = title.split(' - ')[0] #ep
+            title = title.replace(" - Gimy 劇迷", "") #ep
+            title = title.replace("線上看","")
             links = Gimy.Get_MUrl(site) if get_link else 1
 
         return title, links
@@ -608,7 +609,7 @@ if __name__=='__main__':
 
     # config
     TMP = (os.getcwd()+"/Tmp").replace('\\','/')
-    downloadPath, Quality, chromeP = Get_Config()
+    downloadPath0, Quality, chromeP = Get_Config()
 
     go = True
     # check chrome profile
@@ -631,28 +632,28 @@ if __name__=='__main__':
             continue
 
         if linktype==1:
-            Baha.Download_Request(link, TMP, downloadPath, Quality, chromeP)
+            Baha.Download_Request(link, TMP, downloadPath0, Quality, chromeP)
         elif linktype==2:
             title = Baha.Get_Title(link, False)
-            downloadPath = downloadPath + '/' + title
+            downloadPath = downloadPath0 + '/' + title
             eps = Baha.Parse_Episodes(link)
             eps = CheckBox(eps)
             for ep in eps:
                 Baha.Download_Request(ep, TMP, downloadPath, Quality, chromeP)
         elif linktype==3:
-            Anime1.Download_Request(link, downloadPath, chromeP)
+            Anime1.Download_Request(link, downloadPath0, chromeP)
         elif linktype==4:
             title,eps = Anime1.Get_Title_Link(link)
-            downloadPath = downloadPath + '/' + title + '/'
+            downloadPath = downloadPath0 + '/' + title + '/'
             eps = CheckBox(eps)
             for ep in eps:
                 Anime1.Download_Request(ep, downloadPath, chromeP)
         elif linktype==5:
-            Gimy.Download_Request(link, TMP, downloadPath)
+            Gimy.Download_Request(link, TMP, downloadPath0)
         elif linktype==6:
             title, eps = Gimy.Get_Title_Link(link)
             try:
-                downloadPath = downloadPath + '/' + title + '/'
+                downloadPath = downloadPath0 + '/' + title + '/'
                 print(f"總共有{len(eps)}集")
                 getall = input("全部下載(y/n): ")
                 if getall=='n' or getall=='N':
