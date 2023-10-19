@@ -433,7 +433,7 @@ class Gimy:
         # return title with all eps' links
             title = title.split('線上看')[0] #main
             if get_link:
-                yun_all = soup.find_all('a', class_='gico')
+                yun_all = soup.find_all(class_='gico')
                 yun_name = [x.text for x in yun_all]
                 print('\n'.join([f"{i}.{y}" for i, y in enumerate(yun_name, 1)]))
                 try:
@@ -652,14 +652,15 @@ if __name__=='__main__':
                 getall = input("全部下載(y/n): ")
                 if getall=='n' or getall=='N':
                     st = int(input(f"從第幾集開始?(1~{len(eps)}): "))
-                    ed = int(input(f"下載到第幾集?({st+1}~{len(eps)}): "))
+                    ed = int(input(f"下載到第幾集?({st}~{len(eps)}): "))
                     st-=1
                 else:
                     st=0
                     ed=len(eps)
-                for i in range(st,ed):
-                    if not Gimy.Download_Request(eps[i], TMP, downloadPath):
-                        break
+                if not st > ed:
+                    for i in range(st,ed):
+                        if not Gimy.Download_Request(eps[i], TMP, downloadPath):
+                            break
             except:
                 print("Bad!")
 
