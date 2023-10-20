@@ -9,7 +9,7 @@
 ## 安裝
 
 下載 [解碼器](https://drive.google.com/file/d/1UmGVzMtpJCvQBaoJNBD4uEBboTu1jGTw/view?usp=drive_link) 放置到主程式內的Tmp資料夾裡 
-下載 [驅動器](https://drive.google.com/file/d/17-Tu7rckzNw1xfyVg2Ds1lODabJVECRW/view?usp=drive_link) 放置到主程式內的Tmp資料夾裡 
+下載 [chrome driver](https://googlechromelabs.github.io/chrome-for-testing/#stable) 放置到主程式內的Tmp資料夾裡 
 
 執行**'setup.bat'** (安裝python及環境)
 
