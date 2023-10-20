@@ -408,7 +408,7 @@ class Gimy:
             return 0
         
         if title=='404 not found' or title=='System Error':
-            print("err: Bad!")
+            print("err: Bad Page!")
             return 0
         
         if link==1:
@@ -426,6 +426,7 @@ class Gimy:
         title_tag = soup.find('title')
         title = title_tag.text if title_tag else None
         if not title:
+            print("title not found")
             return None, None
 
         prefix = "https://gimy.ai" if "gimy.ai" in site else "https://gimy.su"
@@ -445,8 +446,8 @@ class Gimy:
                     lst = [x.get_text() for x in ele_list]
                     if sum(lst[i] >= lst[i + 1] for i in range(len(lst) - 1)) > len(lst)//2: #loose decending ordered
                         links.reverse()
-                except:
-                    print("Bad!")
+                except  Exception as e:
+                    print(str(e))
                     return None, None
             else:
                 links = 2
@@ -475,17 +476,23 @@ class Gimy:
                 driver = webdriver.Chrome(service=driver_service, options=chrome_options)
                 driver.get(link)
                 start_time=time.time()
-                while not target: # wait for the request for 30s
-                    if time.time()-start_time>15:
+                retry = 0
+                while not target: # wait for the request for 60s
+                    if retry > 3:
                         break
+                    if time.time()-start_time>30:
+                        driver.refresh()
+                        start_time=time.time()
+                        retry+=1
+                        print(f"No respond, page refresh {retry} time")
+                        continue
                     for req in driver.requests:
                         if req.response and req.url.endswith(".m3u8") and (req.response.status_code==200):
                             target=req.url
                             break
                 driver.quit()
                 print('\n')
-            if not target:
-                return None
+
             target = target.replace("\\", '')
 
             response = requests.get(target)
@@ -498,7 +505,8 @@ class Gimy:
                 if s not in target:
                     target+='/'+s
             return target
-        except:
+        except Exception as e:
+            print(str(e))
             return None
         
     def download_chunk(chunk, index, savepath, progress_bar=None, lock=None, showerr=True):
@@ -660,7 +668,8 @@ if __name__=='__main__':
                 if not st > ed:
                     for i in range(st,ed):
                         if not Gimy.Download_Request(eps[i], TMP, downloadPath):
-                            break
+                            print(f"Fail link:{eps[i]}")
+                            continue
             except:
                 print("Bad!")
 
