@@ -554,8 +554,8 @@ class Gimy:
             keyURI = None
 
         # save m3u8 list
-        with open(tmpPath+'/original.m3u8','w') as file:
-            file.write(response.text)
+        with open(tmpPath+'/original.m3u8','wb') as file:
+            file.write(response.text.encode("utf-8"))
         chunk_sav = '' 
         i=0
         for line in response.text.split('\n'):
@@ -670,8 +670,8 @@ if __name__=='__main__':
                         if not Gimy.Download_Request(eps[i], TMP, downloadPath):
                             print(f"Fail link:{eps[i]}")
                             continue
-            except:
-                print("Bad!")
+            except Exception as e:
+                print("Error:", str(e))
 
 
 
