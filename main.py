@@ -102,6 +102,7 @@ def MP4convert(m3u8_file, mp4_file, ffmpeg_path=None):
 class Baha:
 
     headers = {
+        "Origin": "https://ani.gamer.com.tw",
         'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36'
     }
 
@@ -148,16 +149,16 @@ class Baha:
     def Set_Session(chromeP="Default"):
         ss = requests.Session()
 
-        if os.path.isfile(Baha.cookie_file):
-            cookie_set = 2
-        else:
-            cookie_set = 1
+        # if os.path.isfile(Baha.cookie_file):
+        #     cookie_set = 2
+        # else:
+        cookie_set = 1
         
         if cookie_set == 1:   # load from chrome
             try:
                 cookies = browser_cookie3.chrome(domain_name='gamer.com', cookie_file=os.getenv("APPDATA") + "/../Local/Google/Chrome/User Data/"+chromeP+"/Network/Cookies")
                 ss.cookies = cookies
-                pickle.dump(requests.utils.dict_from_cookiejar(cookies), open(Baha.cookie_file,"wb"))
+                # pickle.dump(requests.utils.dict_from_cookiejar(cookies), open(Baha.cookie_file,"wb"))
             except:
                 print("Error when loading cookies, please make sure tuning off chrome first!")
                 return None
@@ -229,7 +230,7 @@ class Baha:
                 q = line.split('x')[1].strip()
                 if Quality == q:
                     nextLine = lines[lines.index(line) + 1]
-                    Res = nextLine.split('?')[0].strip()
+                    Res = nextLine.strip()
                     break
         if Res == '':
             print("Get List Link Fail")
