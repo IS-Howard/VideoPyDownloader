@@ -14,7 +14,6 @@ import shutil
 import pickle
 
 from tqdm import tqdm,trange
-from PyInquirer import prompt
 
 import subprocess
 import concurrent.futures
@@ -23,7 +22,6 @@ import threading
 from seleniumwire import webdriver
 from selenium.webdriver.chrome.service import Service as ChromeService
 from selenium.webdriver.common.by import By
-#from selenium.webdriver.common.desired_capabilities import DesiredCapabilities # old selenium
 
 def Get_Config():
     with open('config', 'r') as file:
@@ -46,24 +44,26 @@ def Get_Link_Type(link,chromeP='Default'):
         return Gimy.Link_Validate(link)
     return Baha.Link_Validate(link) #baha 0(bad) 1(sn) 2(full)
 
-def CheckBox(eps):
-    questions = [
-        {
-            'type': 'checkbox',
-            'message': '選擇要下載的(已預選全部)',
-            'name': 'sns',
-            'choices': [{'name':eps[i][1], 'checked':True} for i in range(len(eps))],
-            'validate': lambda answer: 'You must choose at least one' \
-                if len(answer) == 0 else True
-        }
-    ]
-    answers = prompt(questions)
-    sel = set(answers['sns'])
-    sel_eps = []
-    for i in range(len(eps)):
-        if eps[i][1] in sel:
-            sel_eps.append(eps[i][0])
-    return sel_eps
+def Multiple_Download_Select(eps):
+    try:
+        print(f"總共有{len(eps)}集")
+        getall = input("全部下載(y/n): ")
+        if getall=='n' or getall=='N':
+            st = int(input(f"從第幾集開始?(1~{len(eps)}): "))
+            ed = int(input(f"下載到第幾集?({st}~{len(eps)}): "))
+            st-=1
+        else:
+            st=0
+            ed=len(eps)
+        if not st > ed:
+            return st, ed
+        else:
+            print("Bad")
+            return None,None
+
+    except Exception as e:
+        print("Error:", str(e))
+        return None,None
 
 def MP4convert(m3u8_file, mp4_file, ffmpeg_path=None):
     print("mp4 generating..")
@@ -127,7 +127,22 @@ class Baha:
     def Parse_Episodes(link):
         headers = Baha.headers
         response = requests.get(link, headers=headers)
-        return re.findall(r'"\?sn=(\d{5})">(\d+\.?\d?)<', response.text)
+        soup = bs(response.text, 'html.parser')
+        region = soup.find(class_="season")
+        version_name = [x.get_text() for x in region.find_all("p")]
+        version_region = region.find_all("ul")
+        print('\n'.join([f"{i}.{y}" for i, y in enumerate(version_name, 1)]))
+        try:
+            if len(version_name) > 1:
+                sel = input(f"選擇版本({1}~{len((version_name))}): ")
+                sel = int(sel)-1
+            else:
+                sel = 0
+            sel_region = str(version_region[sel])
+            return re.findall(r'"\?sn=(\d+)">\d+\.?\d?<', sel_region)
+        except Exception as e:
+            print(f"ERR: {str(e)}")
+            return None
 
     def Link_Validate(link):
         linktype = 0 # bad link
@@ -333,8 +348,7 @@ class Anime1:
             links = []
             for post in reversed(posts):
                 link = post.find('a')['href']
-                ep = post.text.split(' [')[-1].replace("]","")
-                links.append((link,ep))
+                links.append(link)
         else:
         # return sigle eq tile and api link
             target = soup.find('video')
@@ -640,37 +654,32 @@ if __name__=='__main__':
             title = Baha.Get_Title(link, False)
             downloadPath = downloadPath0 + '/' + title
             eps = Baha.Parse_Episodes(link)
-            eps = CheckBox(eps)
-            for ep in eps:
-                Baha.Download_Request(ep, TMP, downloadPath, Quality, chromeP)
+            try:
+                st, ed = Multiple_Download_Select(eps)
+                for i in range(st,ed):
+                    Baha.Download_Request(eps[i], TMP, downloadPath, Quality, chromeP)
+            except Exception as e:
+                print("Error:", str(e))
         elif linktype==3:
             Anime1.Download_Request(link, downloadPath0, chromeP)
         elif linktype==4:
             title,eps = Anime1.Get_Title_Link(link)
             downloadPath = downloadPath0 + '/' + title + '/'
-            eps = CheckBox(eps)
-            for ep in eps:
-                Anime1.Download_Request(ep, downloadPath, chromeP)
+            try:
+                st, ed = Multiple_Download_Select(eps)
+                for i in range(st,ed):
+                    Anime1.Download_Request(eps[i], downloadPath, chromeP)
+            except Exception as e:
+                print("Error:", str(e))
         elif linktype==5:
             Gimy.Download_Request(link, TMP, downloadPath0)
         elif linktype==6:
             title, eps = Gimy.Get_Title_Link(link)
+            downloadPath = downloadPath0 + '/' + title + '/'
             try:
-                downloadPath = downloadPath0 + '/' + title + '/'
-                print(f"總共有{len(eps)}集")
-                getall = input("全部下載(y/n): ")
-                if getall=='n' or getall=='N':
-                    st = int(input(f"從第幾集開始?(1~{len(eps)}): "))
-                    ed = int(input(f"下載到第幾集?({st}~{len(eps)}): "))
-                    st-=1
-                else:
-                    st=0
-                    ed=len(eps)
-                if not st > ed:
-                    for i in range(st,ed):
-                        if not Gimy.Download_Request(eps[i], TMP, downloadPath):
-                            print(f"Fail link:{eps[i]}")
-                            continue
+                st, ed = Multiple_Download_Select(eps)
+                for i in range(st,ed):
+                    Gimy.Download_Request(eps[i], TMP, downloadPath)
             except Exception as e:
                 print("Error:", str(e))
 
