@@ -333,31 +333,49 @@ class Anime1:
         return 0
 
     def Get_Title_Link(site):
-        response = requests.get(site, headers=Anime1.headers, cookies=Anime1.cookies)
-        soup = bs(response.text, 'html.parser')
+        try:
+            response = requests.get(site, headers=Anime1.headers, cookies=Anime1.cookies)
+            soup = bs(response.text, 'html.parser')
+            title_text =soup.find('title').text
+            title = title_text.split(" – Anime1.me")[0]
 
-        title_tag = soup.find('title')
-        title_text = title_tag.text if title_tag else None
-        title = title_text.split(" – Anime1.me")[0]
+            if site.find("category")!=-1:
+            # return title with all eps' links
+                links = []
+                pages = 1
+                site = site.split('/page/')[0]
+                while True:
+                    r2 = requests.get(site+'/page/'+str(pages+1), headers=Anime1.headers, cookies=Anime1.cookies)
+                    s2 = bs(r2.text, 'html.parser')
+                    if '找不到符合條件的頁面' in s2.find('title').text:
+                        break
+                    pages += 1
+                for i in range(pages,1,-1):
+                    r2 = requests.get(site+'/page/'+str(i), headers=Anime1.headers, cookies=Anime1.cookies)
+                    s2 = bs(r2.text, 'html.parser')
+                    posts = s2.find_all('h2')
+                    for post in reversed(posts):
+                        if post.find('a'):
+                            link = post.find('a')['href']
+                            links.append(link)
+                r2 = requests.get(site, headers=Anime1.headers, cookies=Anime1.cookies)
+                s2 = bs(r2.text, 'html.parser')
+                posts = s2.find_all('h2')
+                for post in reversed(posts):
+                    if post.find('a'):
+                        link = post.find('a')['href']
+                        links.append(link)
+            else:
+            # return sigle eq tile and api link
+                target = soup.find('video')
+                target = target.get('data-apireq')
+                links = 'd='+target
 
-        if site.find("category")!=-1:
-        # return title with all eps' links
-            posts = soup.find_all('h2')
-            if not posts:
-                return None, None
-            links = []
-            for post in reversed(posts):
-                link = post.find('a')['href']
-                links.append(link)
-        else:
-        # return sigle eq tile and api link
-            target = soup.find('video')
-            if not target:
-                return None, None
-            target = target.get('data-apireq')
-            links = 'd='+target
+            return title, links
 
-        return title, links
+        except:
+            print("Err: Get_Title_Link")
+            return None, None
     
     def cookie_header(cookies):
         res = ''
