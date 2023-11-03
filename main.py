@@ -164,16 +164,16 @@ class Baha:
     def Set_Session(chromeP="Default"):
         ss = requests.Session()
 
-        # if os.path.isfile(Baha.cookie_file):
-        #     cookie_set = 2
-        # else:
-        cookie_set = 1
+        if os.path.isfile(Baha.cookie_file):
+            cookie_set = 2
+        else:
+            cookie_set = 1
         
         if cookie_set == 1:   # load from chrome
             try:
                 cookies = browser_cookie3.chrome(domain_name='gamer.com', cookie_file=os.getenv("APPDATA") + "/../Local/Google/Chrome/User Data/"+chromeP+"/Network/Cookies")
                 ss.cookies = cookies
-                # pickle.dump(requests.utils.dict_from_cookiejar(cookies), open(Baha.cookie_file,"wb"))
+                pickle.dump(requests.utils.dict_from_cookiejar(cookies), open(Baha.cookie_file,"wb"))
             except:
                 print("Error when loading cookies, please make sure tuning off chrome first!")
                 return None
@@ -193,6 +193,7 @@ class Baha:
         headers = Baha.headers
         ss = Baha.Set_Session(chromeP=chromeP)
         if not ss:
+            shutil.rmtree(tmpPath)
             return
 
         #Get Title
@@ -208,9 +209,10 @@ class Baha:
         response = ss.get('https://ani.gamer.com.tw/ajax/token.php?adID=undefined&sn='+sn+ "&device="+deviceID+"&hash="+Baha.RandomString(12), headers=headers)
         if(response.text.find("error")!=-1):
             print(response.text)
-            print("Access Fail")
+            print("Access Fail (Login in Chrome again may fix)")
             #remove tmp files
             shutil.rmtree(tmpPath)
+            os.remove(Baha.cookie_file)
             return
 
         #Get Ad
@@ -248,9 +250,10 @@ class Baha:
                     Res = nextLine.strip()
                     break
         if Res == '':
-            print("Get List Link Fail")
+            print("Get List Link Fail (Login in Chrome again may fix)")
             #remove tmp files
             shutil.rmtree(tmpPath)
+            os.remove(Baha.cookie_file)
             return
         
         #M3U8 setup
