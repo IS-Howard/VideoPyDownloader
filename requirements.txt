@@ -3,3 +3,4 @@ requests==2.31.0
 tqdm==4.65.0
 selenium-wire==5.1.0
 bs4==0.0.1
+selenium>=4.15.1 # not directly required, pinned by Snyk to avoid a vulnerability
