@@ -42,6 +42,8 @@ def Get_Link_Type(link,chromeP='Default'):
         return Anime1.Link_Validate(link,chromeP)
     elif link.find("gimy.su")!=-1 or link.find("gimy.ai")!=-1: #gimy 0(bad) 5(sn) 6(full)
         return Gimy.Link_Validate(link)
+    elif link.find("anime1.one")!=-1:
+        return AnimeOne.Link_Validate(link)
     return Baha.Link_Validate(link) #baha 0(bad) 1(sn) 2(full)
 
 def Multiple_Download_Select(eps):
@@ -435,6 +437,171 @@ class Anime1:
                 bytes_so_far += len(chunk)
                 pbar.update(len(chunk))
 
+class AnimeOne:
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36'}
+
+    def Link_Validate(link):
+        title, link = AnimeOne.Get_Title_Link(link)
+
+        if title==None:
+            print('err: None')
+            return 0
+        
+        if title=='找不到符合條件的頁面':
+            print("err: ", title)
+            return 0
+        
+        if isinstance(link, str):
+            print(link)
+            return 7
+        
+        if isinstance(link, list):
+            return 8
+        
+        return 0
+
+    def Get_Title_Link(site):
+        try:
+            response = requests.get(site, headers=AnimeOne.headers)
+            soup = bs(response.text, 'html.parser')
+            title_text =soup.find('title').text
+            title = title_text.split(" – Anime1.one")[0]
+
+            if site.find("-")==-1:
+                # return title with all eps' links
+                links = []
+                pages = 1
+                site = site.split('/page/')[0]
+                while True:
+                    r2 = requests.get(site+'page/'+str(pages+1), headers=AnimeOne.headers)
+                    s2 = bs(r2.text, 'html.parser')
+                    posts = s2.find_all('h2')
+                    if len(posts) == 1:
+                        break
+                    pages += 1
+                for i in range(pages,1,-1):
+                    r2 = requests.get(site+'page/'+str(i), headers=AnimeOne.headers)
+                    s2 = bs(r2.text, 'html.parser')
+                    posts = s2.find_all('h2')
+                    for post in reversed(posts):
+                        if post.find('a'):
+                            link = post.find('a')['href']
+                            links.append("https://anime1.one"+link)
+                r2 = requests.get(site, headers=AnimeOne.headers)
+                s2 = bs(r2.text, 'html.parser')
+                posts = s2.find_all('h2')
+                for post in reversed(posts):
+                    if post.find('a'):
+                        link = post.find('a')['href']
+                        links.append("https://anime1.one"+link)
+            else:
+            # return sigle eq tile and api link
+                chrome_options = webdriver.ChromeOptions()
+                chrome_options.add_argument("--log-level=3")
+                chrome_options.add_argument('--headless')
+                driver_service = ChromeService(executable_path=r"./Tmp/chromedriver.exe")
+                driver = webdriver.Chrome(service=driver_service, options=chrome_options)
+                driver.get(site)
+                iframe_xpath = '//div[2]/p[1]/iframe[1]'
+                iframe = driver.find_element(By.XPATH, iframe_xpath)
+                driver.switch_to.frame(iframe)
+                src = driver.find_element(By.TAG_NAME, 'source')
+                links = src.get_attribute('src') #m3u8 link
+
+            return title, links
+
+        except:
+            print("Err: Get_Title_Link")
+            return None, None
+    
+
+    def Download_Request(site, TMP, downloadPath, max_threads=15):
+        #path
+        tmpPath = TMP+'/gimy'
+        tmpfile = tmpPath+'/0.m3u8'
+        if not os.path.isdir(tmpPath):
+            os.makedirs(tmpPath)
+        if not os.path.isdir(downloadPath):
+            os.makedirs(downloadPath)
+
+        title, link = AnimeOne.Get_Title_Link(site)
+        if not link or not title:
+            print("Connection Failed. Source may be invalid!\n")
+            return False
+        print(title)
+
+
+        response = requests.get(link)
+        for line in response.text.split("\n"):
+            if line.endswith('m3u8'):
+                overlap = line.split("/")[1]
+                link = (link.split(overlap)[0]+overlap+line.split(overlap)[1])
+
+        # m3u8 link
+        response = requests.get(link)
+        chunklist = re.findall(r'.+\.ts',response.text)
+
+        # check m3u8 key
+        match = re.search(r'URI="([^"]+)"', response.text)
+        if match:
+            keyURI = match.group(1)
+        else:
+            keyURI = None
+
+        # save m3u8 list
+        with open(tmpPath+'/original.m3u8','wb') as file:
+            file.write(response.text.encode("utf-8"))
+        chunk_sav = '' 
+        i=0
+        for line in response.text.split('\n'):
+            if line.endswith(".ts"):
+                chunk_sav += str(i)+'.ts'
+                i+=1
+            else:
+                if keyURI and keyURI in line:
+                    line = line.replace(keyURI,'/key.key')
+                chunk_sav += line
+            chunk_sav += '\n'
+        with open(tmpfile,"w") as file:
+            file.write(chunk_sav)
+
+        # chunk link prefix?
+        if not "http" in chunklist[0]:
+            sep = link.split('/')
+            prefix = 'https:/'
+            for i in range(2,len(sep)-1):
+                prefix =prefix+'/'+sep[i] if sep[i] not in chunklist[0] else prefix
+            chunklist = [prefix+'/'+x for x in chunklist]
+        # Download key?
+        if keyURI:
+            response = requests.get(prefix+keyURI, stream=True)
+            with open(tmpPath+'/key.key','wb') as file:
+                for chunk in response.iter_content(chunk_size=1024):
+                    if chunk:
+                        file.write(chunk)
+
+        # Download from m3u8 link
+        with concurrent.futures.ThreadPoolExecutor(max_threads) as executor:
+            total_chunks = len(chunklist)
+            progress_bar = tqdm(total=total_chunks, desc="Download Progress", unit="chunk")
+
+            lock = threading.Lock() # Mutex lock for updating the progress bar
+
+            for index, chunk_url in enumerate(chunklist):
+                executor.submit(lambda url=chunk_url, index=index: Gimy.download_chunk(url, index, tmpPath, progress_bar, lock))
+
+            # Wait for all tasks to complete
+            executor.shutdown()
+            progress_bar.close()
+
+        #ffmpeg convert
+        if MP4convert(tmpfile, downloadPath +'/'+ title + ".mp4"):
+            return False
+
+        #remove tmp files
+        shutil.rmtree(tmpPath)
+        return True
+
 class Gimy:
     def Link_Validate(site):
         title, link = Gimy.Get_Title_Link(site,False)
@@ -547,7 +714,7 @@ class Gimy:
         
     def download_chunk(chunk, index, savepath, progress_bar=None, lock=None, showerr=True):
         try:
-            response = requests.get(chunk, stream=True)
+            response = requests.get(chunk, stream=True, timeout=60)
             if response.status_code == 200:
                 with open(f"{savepath}/{index}.ts", 'wb') as file:
                     for schunk in response.iter_content(chunk_size=1024):
@@ -701,6 +868,17 @@ if __name__=='__main__':
                 st, ed = Multiple_Download_Select(eps)
                 for i in range(st,ed):
                     Gimy.Download_Request(eps[i], TMP, downloadPath)
+            except Exception as e:
+                print("Error:", str(e))
+        elif linktype==7:
+            AnimeOne.Download_Request(link,TMP,downloadPath0)
+        elif linktype==8:
+            title, eps = AnimeOne.Get_Title_Link(link)
+            downloadPath = downloadPath0 + '/' + title + '/'
+            try:
+                st, ed = Multiple_Download_Select(eps)
+                for i in range(st,ed):
+                    AnimeOne.Download_Request(eps[i], TMP, downloadPath)
             except Exception as e:
                 print("Error:", str(e))
 
