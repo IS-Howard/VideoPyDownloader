@@ -460,7 +460,7 @@ class AnimeOne:
         
         return 0
 
-    def Get_Title_Link(site):
+    def Get_Title_Link(site, sel_src=1):
         try:
             response = requests.get(site, headers=AnimeOne.headers)
             soup = bs(response.text, 'html.parser')
@@ -502,6 +502,11 @@ class AnimeOne:
                 driver_service = ChromeService(executable_path=r"./Tmp/chromedriver.exe")
                 driver = webdriver.Chrome(service=driver_service, options=chrome_options)
                 driver.get(site)
+                # source selection
+                sources = driver.find_elements(By.CLASS_NAME, 'play-select')
+                sources[sel_src-1].click()
+                time.sleep(1)
+                # get src link from iframe
                 iframe_xpath = '//div[2]/p[1]/iframe[1]'
                 iframe = driver.find_element(By.XPATH, iframe_xpath)
                 driver.switch_to.frame(iframe)
@@ -515,7 +520,7 @@ class AnimeOne:
             return None, None
     
 
-    def Download_Request(site, TMP, downloadPath, max_threads=15):
+    def Download_Request(site, TMP, downloadPath, max_threads=15, sel_src=1):
         #path
         tmpPath = TMP+'/gimy'
         tmpfile = tmpPath+'/0.m3u8'
@@ -524,7 +529,7 @@ class AnimeOne:
         if not os.path.isdir(downloadPath):
             os.makedirs(downloadPath)
 
-        title, link = AnimeOne.Get_Title_Link(site)
+        title, link = AnimeOne.Get_Title_Link(site, sel_src)
         if not link or not title:
             print("Connection Failed. Source may be invalid!\n")
             return False
@@ -819,9 +824,9 @@ if __name__=='__main__':
 
     go = True
     # check chrome profile
-    if not os.path.isfile(os.getenv("APPDATA") + "/../Local/Google/Chrome/User Data/"+chromeP+"/Network/Cookies"):
-        print("Cookie not exist, please check profile setting")
-        go = False
+    # if not os.path.isfile(os.getenv("APPDATA") + "/../Local/Google/Chrome/User Data/"+chromeP+"/Network/Cookies"):
+    #     print("Cookie not exist, please check profile setting")
+    #     go = False
 
 
     while(go):
@@ -872,14 +877,16 @@ if __name__=='__main__':
             except Exception as e:
                 print("Error:", str(e))
         elif linktype==7:
-            AnimeOne.Download_Request(link,TMP,downloadPath0)
+            sel = int(input(f"選擇分流(1~5): "))
+            AnimeOne.Download_Request(link,TMP,downloadPath0, sel)
         elif linktype==8:
             title, eps = AnimeOne.Get_Title_Link(link)
             downloadPath = downloadPath0 + '/' + title + '/'
             try:
                 st, ed = Multiple_Download_Select(eps)
+                sel = int(input(f"選擇分流(1~5): "))
                 for i in range(st,ed):
-                    AnimeOne.Download_Request(eps[i], TMP, downloadPath)
+                    AnimeOne.Download_Request(eps[i], TMP, downloadPath, sel)
             except Exception as e:
                 print("Error:", str(e))
 
