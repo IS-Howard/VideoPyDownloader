@@ -559,7 +559,7 @@ class AnimeOne:
                 i+=1
             else:
                 if keyURI and keyURI in line:
-                    line = line.replace(keyURI,'/key.key')
+                    line = line.replace(keyURI,'./key.key')
                 chunk_sav += line
             chunk_sav += '\n'
         with open(tmpfile,"w") as file:
@@ -767,7 +767,7 @@ class Gimy:
                 i+=1
             else:
                 if keyURI and keyURI in line:
-                    line = line.replace(keyURI,'/key.key')
+                    line = line.replace(keyURI,'./key.key')
                 chunk_sav += line
             chunk_sav += '\n'
         with open(tmpfile,"w") as file:
@@ -782,6 +782,7 @@ class Gimy:
             chunklist = [prefix+'/'+x for x in chunklist]
         # Download key?
         if keyURI:
+            prefix = link.replace("index.m3u8", "")
             response = requests.get(prefix+keyURI, stream=True)
             with open(tmpPath+'/key.key','wb') as file:
                 for chunk in response.iter_content(chunk_size=1024):
