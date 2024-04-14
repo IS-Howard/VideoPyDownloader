@@ -67,6 +67,145 @@ def Multiple_Download_Select(eps):
         print("Error:", str(e))
         return None,None
 
+def Get_m3u8_url(link):
+    chrome_options = webdriver.ChromeOptions()
+    chrome_options.add_argument("--log-level=3")
+    chrome_options.add_argument('--headless')
+    driver_service = ChromeService(executable_path=r"./Tmp/chromedriver.exe")
+    driver = webdriver.Chrome(service=driver_service, options=chrome_options)
+    driver.get(link)
+    start_time=time.time()
+    retry = 0
+    target = None
+    while not target: # wait for the request for 60s
+        if retry > 3:
+            break
+        if time.time()-start_time>30:
+            driver.refresh()
+            start_time=time.time()
+            retry+=1
+            print(f"No respond, page refresh {retry} time")
+            continue
+        for req in driver.requests:
+            if req.response and req.url.endswith(".m3u8") and (req.response.status_code==200):
+                target=req.url
+                break
+    driver.quit()
+    if target.find("url=")!=-1: # meiju8 url
+        target = target[target.find("url=")+4:]
+
+    # level 2 parsing if exist
+    response = requests.get(target)
+    match = re.search(r".*\.m3u8", response.text, re.MULTILINE)
+    if not match:
+        return target
+    hls_line = match.group()
+    target = target.replace("/index.m3u8","")
+    for s in hls_line.split('/'):
+        if s not in target:
+            target+='/'+s
+    return target
+
+def Download_m3u8(link, TMP, session=None):
+    tmpPath = TMP+'/gimy'
+    tmpfile = tmpPath+'/0.m3u8'
+    if session == None:
+        response = requests.get(link)
+    else:
+        response = session.get(link)
+    chunklist = re.findall(r'.+\.ts',response.text)
+
+    # check m3u8 key
+    match = re.search(r'URI="([^"]+)"', response.text)
+    if match:
+        keyURI = match.group(1)
+    else:
+        keyURI = None
+
+    # save m3u8 list
+    with open(tmpPath+'/original.m3u8','wb') as file:
+        file.write(response.text.encode("utf-8"))
+    chunk_sav = '' 
+    i=0
+    for line in response.text.split('\n'):
+        if line.endswith(".ts"):
+            chunk_sav += str(i)+'.ts'
+            i+=1
+        else:
+            if keyURI and keyURI in line:
+                line = line.replace(keyURI,'./key.key')
+            chunk_sav += line
+        chunk_sav += '\n'
+    with open(tmpfile,"w") as file:
+        file.write(chunk_sav)
+
+    # chunk link prefix?
+    if not "http" in chunklist[0]:
+        sep = link.split('/')
+        prefix = 'https:/'
+        for i in range(2,len(sep)-1):
+            prefix =prefix+'/'+sep[i] if sep[i] not in chunklist[0] else prefix
+        chunklist = [prefix+'/'+x for x in chunklist]
+    # Download key?
+    if keyURI:
+        prefix = link.replace("index.m3u8", "")
+        response = requests.get(prefix+keyURI, stream=True)
+        with open(tmpPath+'/key.key','wb') as file:
+            for chunk in response.iter_content(chunk_size=1024):
+                if chunk:
+                    file.write(chunk)
+    return chunklist
+
+def download_chunk(chunk, index, savepath, progress_bar=None, lock=None, showerr=True):
+    retries = 0
+    while retries < 5:
+        try:
+            response = requests.get(chunk, stream=True, timeout=60)
+            if response.status_code == 200:
+                with open(f"{savepath}/{index}.ts", 'wb') as file:
+                    for schunk in response.iter_content(chunk_size=1024):
+                        if schunk:
+                            file.write(schunk)
+            else:
+                if showerr:
+                    print(f"Failed to download chunk {index}. Status code: {response.status_code}")
+                retries += 1
+                continue
+                
+            if progress_bar:
+                with lock:
+                    progress_bar.update(1)
+                    
+            # If download is successful, break the retry loop
+            break
+        
+        except requests.Timeout:
+            if showerr:
+                print(f"Timeout error downloading chunk {index}. Retrying...")
+            retries += 1
+            time.sleep(1)
+        
+        except Exception as e:
+            print(f"Error downloading chunk {index}: {str(e)}")
+            retries += 1
+            continue
+
+def Download_Chunks(chunklist, TMP, max_threads=15):
+    tmpPath = TMP+'/gimy'
+    tmpfile = tmpPath+'/0.m3u8'
+    with concurrent.futures.ThreadPoolExecutor(max_threads) as executor:
+        total_chunks = len(chunklist)
+        progress_bar = tqdm(total=total_chunks, desc="Download Progress", unit="chunk")
+
+        lock = threading.Lock() # Mutex lock for updating the progress bar
+
+        for index, chunk_url in enumerate(chunklist):
+            executor.submit(lambda url=chunk_url, index=index: download_chunk(url, index, tmpPath, progress_bar, lock))
+
+        # Wait for all tasks to complete
+        executor.shutdown()
+        progress_bar.close()
+
 def MP4convert(m3u8_file, mp4_file, ffmpeg_path=None):
     print("mp4 generating..")
     if not ffmpeg_path:
@@ -495,30 +634,14 @@ class AnimeOne:
                         link = post.find('a')['href']
                         links.append("https://anime1.one"+link)
             else:
-            # return sigle eq tile and api link
-                chrome_options = webdriver.ChromeOptions()
-                chrome_options.add_argument("--log-level=3")
-                chrome_options.add_argument('--headless')
-                driver_service = ChromeService(executable_path=r"./Tmp/chromedriver.exe")
-                driver = webdriver.Chrome(service=driver_service, options=chrome_options)
-                driver.get(site)
-                # source selection
-                sources = driver.find_elements(By.CLASS_NAME, 'play-select')
-                sources[sel_src-1].click()
-                time.sleep(1)
-                # get src link from iframe
-                iframe_xpath = '//div[2]/p[1]/iframe[1]'
-                iframe = driver.find_element(By.XPATH, iframe_xpath)
-                driver.switch_to.frame(iframe)
-                src = driver.find_element(By.TAG_NAME, 'source')
-                links = src.get_attribute('src') #m3u8 link
+                # return sigle eq tile and api link
+                links = Get_m3u8_url(site)
 
             return title, links
 
         except:
             print("Err: Get_Title_Link")
             return None, None
-    
 
     def Download_Request(site, TMP, downloadPath, max_threads=15, sel_src=1):
         #path
@@ -535,69 +658,7 @@ class AnimeOne:
             return False
         print(title)
 
-
-        response = requests.get(link)
-        for line in response.text.split("\n"):
-            if line.endswith('m3u8'):
-                overlap = line.split("/")[1]
-                link = (link.split(overlap)[0]+overlap+line.split(overlap)[1])
-
-        # m3u8 link
-        response = requests.get(link)
-        chunklist = re.findall(r'.+\.ts',response.text)
-
-        # check m3u8 key
-        match = re.search(r'URI="([^"]+)"', response.text)
-        if match:
-            keyURI = match.group(1)
-        else:
-            keyURI = None
-
-        # save m3u8 list
-        with open(tmpPath+'/original.m3u8','wb') as file:
-            file.write(response.text.encode("utf-8"))
-        chunk_sav = '' 
-        i=0
-        for line in response.text.split('\n'):
-            if line.endswith(".ts"):
-                chunk_sav += str(i)+'.ts'
-                i+=1
-            else:
-                if keyURI and keyURI in line:
-                    line = line.replace(keyURI,'./key.key')
-                chunk_sav += line
-            chunk_sav += '\n'
-        with open(tmpfile,"w") as file:
-            file.write(chunk_sav)
-
-        # chunk link prefix?
-        if not "http" in chunklist[0]:
-            sep = link.split('/')
-            prefix = 'https:/'
-            for i in range(2,len(sep)-1):
-                prefix =prefix+'/'+sep[i] if sep[i] not in chunklist[0] else prefix
-            chunklist = [prefix+'/'+x for x in chunklist]
-        # Download key?
-        if keyURI:
-            response = requests.get(prefix+keyURI, stream=True)
-            with open(tmpPath+'/key.key','wb') as file:
-                for chunk in response.iter_content(chunk_size=1024):
-                    if chunk:
-                        file.write(chunk)
-
-        # Download from m3u8 link
-        with concurrent.futures.ThreadPoolExecutor(max_threads) as executor:
-            total_chunks = len(chunklist)
-            progress_bar = tqdm(total=total_chunks, desc="Download Progress", unit="chunk")
-
-            lock = threading.Lock() # Mutex lock for updating the progress bar
-
-            for index, chunk_url in enumerate(chunklist):
-                executor.submit(lambda url=chunk_url, index=index: Gimy.download_chunk(url, index, tmpPath, progress_bar, lock))
-
-            # Wait for all tasks to complete
-            executor.shutdown()
-            progress_bar.close()
+        Download_Chunks(Download_m3u8(link, TMP), TMP)
 
         #ffmpeg convert
         if MP4convert(tmpfile, downloadPath +'/'+ title + ".mp4"):
@@ -668,72 +729,27 @@ class Gimy:
         return title, links
     
     def Get_MUrl(link):
-
         try:
             target = None
             if "gimy.su" in link:
                 response = requests.get(link)
                 match = re.search(r'"url":"([^"]+.m3u8)"',response.text)
                 target = match.group(1) if match else None
+                response = requests.get(target)
+                match = re.search(r".*\.m3u8", response.text, re.MULTILINE)
+                if not match:
+                    return target
+                hls_line = match.group()
+                target = target.replace("/index.m3u8","")
+                for s in hls_line.split('/'):
+                    if s not in target:
+                        target+='/'+s
             elif "gimy.ai" in link:
-                # use selenium to render javascript and get m3u8 link
-                chrome_options = webdriver.ChromeOptions()
-                chrome_options.add_argument("--log-level=3")
-                chrome_options.add_argument('--headless')
-                driver_service = ChromeService(executable_path=r"./Tmp/chromedriver.exe")
-                driver = webdriver.Chrome(service=driver_service, options=chrome_options)
-                driver.get(link)
-                start_time=time.time()
-                retry = 0
-                while not target: # wait for the request for 60s
-                    if retry > 3:
-                        break
-                    if time.time()-start_time>30:
-                        driver.refresh()
-                        start_time=time.time()
-                        retry+=1
-                        print(f"No respond, page refresh {retry} time")
-                        continue
-                    for req in driver.requests:
-                        if req.response and req.url.endswith(".m3u8") and (req.response.status_code==200):
-                            target=req.url
-                            break
-                driver.quit()
-                print('\n')
-
-            target = target.replace("\\", '')
-
-            response = requests.get(target)
-            match = re.search(r".*\.m3u8", response.text, re.MULTILINE)
-            if not match:
-                return target
-            hls_line = match.group()
-            target = target.replace("/index.m3u8","")
-            for s in hls_line.split('/'):
-                if s not in target:
-                    target+='/'+s
+                target = Get_m3u8_url(link)
             return target
         except Exception as e:
             print(str(e))
             return None
-        
-    def download_chunk(chunk, index, savepath, progress_bar=None, lock=None, showerr=True):
-        try:
-            response = requests.get(chunk, stream=True, timeout=60)
-            if response.status_code == 200:
-                with open(f"{savepath}/{index}.ts", 'wb') as file:
-                    for schunk in response.iter_content(chunk_size=1024):
-                        if schunk:
-                            file.write(schunk)
-            else:
-                if showerr:
-                    print(f"Failed to download chunk {index}. Status code: {response.status_code}")
-                
-            if progress_bar:
-                with lock:
-                    progress_bar.update(1)
-        except Exception as e:
-            print(f"Error downloading chunk {index}: {str(e)}")
 
     def Download_Request(site, TMP, downloadPath, max_threads=15):
         #path
@@ -750,63 +766,7 @@ class Gimy:
             return False
         print(title)
 
-        # m3u8 link
-        response = requests.get(link)
-        chunklist = re.findall(r'.+\.ts',response.text)
-
-        # check m3u8 key
-        match = re.search(r'URI="([^"]+)"', response.text)
-        if match:
-            keyURI = match.group(1)
-        else:
-            keyURI = None
-
-        # save m3u8 list
-        with open(tmpPath+'/original.m3u8','wb') as file:
-            file.write(response.text.encode("utf-8"))
-        chunk_sav = '' 
-        i=0
-        for line in response.text.split('\n'):
-            if line.endswith(".ts"):
-                chunk_sav += str(i)+'.ts'
-                i+=1
-            else:
-                if keyURI and keyURI in line:
-                    line = line.replace(keyURI,'./key.key')
-                chunk_sav += line
-            chunk_sav += '\n'
-        with open(tmpfile,"w") as file:
-            file.write(chunk_sav)
-
-        # chunk link prefix?
-        if not "http" in chunklist[0]:
-            sep = link.split('/')
-            prefix = 'https:/'
-            for i in range(2,len(sep)-1):
-                prefix =prefix+'/'+sep[i] if sep[i] not in chunklist[0] else prefix
-            chunklist = [prefix+'/'+x for x in chunklist]
-        # Download key?
-        if keyURI:
-            prefix = link.replace("index.m3u8", "")
-            response = requests.get(prefix+keyURI, stream=True)
-            with open(tmpPath+'/key.key','wb') as file:
-                for chunk in response.iter_content(chunk_size=1024):
-                    if chunk:
-                        file.write(chunk)
-
-        # Download from m3u8 link
-        with concurrent.futures.ThreadPoolExecutor(max_threads) as executor:
-            total_chunks = len(chunklist)
-            progress_bar = tqdm(total=total_chunks, desc="Download Progress", unit="chunk")
-
-            lock = threading.Lock() # Mutex lock for updating the progress bar
-
-            for index, chunk_url in enumerate(chunklist):
-                executor.submit(lambda url=chunk_url, index=index: Gimy.download_chunk(url, index, tmpPath, progress_bar, lock))
-
-            # Wait for all tasks to complete
-            executor.shutdown()
-            progress_bar.close()
+        Download_Chunks(Download_m3u8(link, TMP), TMP)
 
         #ffmpeg convert
         if MP4convert(tmpfile, downloadPath +'/'+ title + ".mp4"):
