@@ -43,7 +43,9 @@ def Get_Link_Type(link,chromeP='Default'):
     elif link.find("gimy.su")!=-1 or link.find("gimy.ai")!=-1: #gimy 0(bad) 5(sn) 6(full)
         return Gimy.Link_Validate(link)
     elif link.find("anime1.one")!=-1:
-        return AnimeOne.Link_Validate(link)
+        return AnimeOne.Link_Validate(link) #animeOne 0(bad) 7(sn) 8(full)
+    elif link.find("meiju8.net")!=-1:
+        return Meiju.Link_Validate(link) #meiju 0(bad) 9(sn) 10(full)
     return Baha.Link_Validate(link) #baha 0(bad) 1(sn) 2(full)
 
 def Multiple_Download_Select(eps):
@@ -168,7 +170,7 @@ def download_chunk(chunk, index, savepath, progress_bar=None, lock=None, showerr
                             file.write(schunk)
             else:
                 if showerr:
-                    print(f"Failed to download chunk {index}. Status code: {response.status_code}")
+                    print(f"Failed to download chunk {index}. Status code: {response.status_code}, Retrying...")
                 retries += 1
                 continue
                 
@@ -189,6 +191,8 @@ def download_chunk(chunk, index, savepath, progress_bar=None, lock=None, showerr
             print(f"Error downloading chunk {index}: {str(e)}")
             retries += 1
             continue
+    if retries == 5:
+        print(f"Failed to download chunk {index}. Retried 5 times, giving up.")
 
 def Download_Chunks(chunklist, TMP, max_threads=15):
     tmpPath = TMP+'/gimy'
@@ -776,6 +780,95 @@ class Gimy:
         shutil.rmtree(tmpPath)
         return True
 
+class Meiju:
+    def Link_Validate(site):
+        title, link = Meiju.Get_Title_Link(site,False)
+
+        if title==None or link==None:
+            print('err: None')
+            return 0
+        
+        if title=='404 not found' or title=='System Error':
+            print("err: Bad Page!")
+            return 0
+        
+        if link==1:
+            return 9
+        
+        if link==2:
+            return 10
+        
+        return 0
+
+    def Get_Title_Link(site, get_link=True):
+        response = requests.get(site)
+        soup = bs(response.text, 'html.parser')
+
+        title_tag = soup.find('title')
+        title = title_tag.text if title_tag else ''
+        if not title:
+            print("title not found")
+            return None, None
+
+
+        if "play" not in site:
+            # return title with all eps' links
+            pattern = r'(.+)免费在线观看'
+            match = re.search(pattern, title)
+            if not match:
+                return None, None
+            title = match.group(1)
+            if get_link:
+                yun_all = soup.select('[class^="playIco"]')
+                yun_name = [x.text for x in yun_all]
+                yun_name = yun_name[1:]
+                print('\n'.join([f"{i}.{y}" for i, y in enumerate(yun_name, 1)]))
+                try:
+                    sel = input(f"選擇來源(1~{len(yun_all)}): ")
+                    sel = int(sel)-1
+                    ele_list = soup.find_all(class_='mn_list_li_movie')[sel]
+                    links = ['https://www.meiju8.net'+x.find('a')['href'] for x in ele_list]
+                except  Exception as e:
+                    print(str(e))
+                    return None, None
+            else:
+                links = 2
+        else:
+            # return sigle eq tile and api link
+            pattern = r'(.+)免费在线观看.+第(\d+)集'
+            match = re.search(pattern, title)
+            if not match:
+                return None, None
+            title = match.group(1)+match.group(2)
+            links = Get_m3u8_url(site) if get_link else 1
+
+        return title, links
+
+    def Download_Request(site, TMP, downloadPath, max_threads=15):
+        #path
+        tmpPath = TMP+'/gimy'
+        tmpfile = tmpPath+'/0.m3u8'
+        if not os.path.isdir(tmpPath):
+            os.makedirs(tmpPath)
+        if not os.path.isdir(downloadPath):
+            os.makedirs(downloadPath)
+
+        title, link = Meiju.Get_Title_Link(site)
+        if not link or not title:
+            print("Connection Failed. Source may be invalid!\n")
+            return False
+        print(title)
+
+        Download_Chunks(Download_m3u8(link, TMP), TMP)
+
+        #ffmpeg convert
+        if MP4convert(tmpfile, downloadPath +'/'+ title + ".mp4"):
+            return False
+
+        #remove tmp files
+        shutil.rmtree(tmpPath)
+        return True
+
 if __name__=='__main__':
 
     # config
@@ -847,6 +940,17 @@ if __name__=='__main__':
                 sel = int(input(f"選擇分流(1~5): "))
                 for i in range(st,ed):
                     AnimeOne.Download_Request(eps[i], TMP, downloadPath, sel)
+            except Exception as e:
+                print("Error:", str(e))
+        elif linktype==9:
+            Meiju.Download_Request(link, TMP, downloadPath0)
+        elif linktype==10:
+            title, eps = Meiju.Get_Title_Link(link)
+            downloadPath = downloadPath0 + '/' + title + '/'
+            try:
+                st, ed = Multiple_Download_Select(eps)
+                for i in range(st,ed):
+                    Meiju.Download_Request(eps[i], TMP, downloadPath)
             except Exception as e:
                 print("Error:", str(e))
 
