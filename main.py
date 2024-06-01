@@ -44,7 +44,7 @@ def Get_Link_Type(link,chromeP='Default'):
         return Gimy.Link_Validate(link)
     elif link.find("anime1.one")!=-1:
         return AnimeOne.Link_Validate(link) #animeOne 0(bad) 7(sn) 8(full)
-    elif link.find("meiju8.net")!=-1:
+    elif link.find("meiju")!=-1:
         return Meiju.Link_Validate(link) #meiju 0(bad) 9(sn) 10(full)
     return Baha.Link_Validate(link) #baha 0(bad) 1(sn) 2(full)
 
@@ -813,7 +813,7 @@ class Meiju:
 
         if "play" not in site:
             # return title with all eps' links
-            pattern = r'(.+)免费在线观看'
+            pattern = r'(.+)在线观看全集'
             match = re.search(pattern, title)
             if not match:
                 return None, None
@@ -827,7 +827,7 @@ class Meiju:
                     sel = input(f"選擇來源(1~{len(yun_all)}): ")
                     sel = int(sel)-1
                     ele_list = soup.find_all(class_='mn_list_li_movie')[sel]
-                    links = ['https://www.meiju8.net'+x.find('a')['href'] for x in ele_list]
+                    links = ['https://www.meijutt.cc'+x.find('a')['href'] for x in ele_list]
                 except  Exception as e:
                     print(str(e))
                     return None, None
