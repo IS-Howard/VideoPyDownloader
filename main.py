@@ -2,6 +2,7 @@ import requests
 import browser_cookie3
 import urllib.request
 from bs4 import BeautifulSoup as bs
+from requests.packages.urllib3.exceptions import InsecureRequestWarning
 
 import json
 import re
@@ -23,6 +24,8 @@ from seleniumwire import webdriver
 from selenium.webdriver.chrome.service import Service as ChromeService
 from selenium.webdriver.common.by import By
 
+requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
+
 def Get_Config():
     with open('config', 'r') as file:
         contents = file.read()
@@ -38,7 +41,9 @@ def Get_Config():
     return downloadPath, Quality, chromeP
 
 def Get_Link_Type(link,chromeP='Default'):
-    if link.find("anime1.me")!=-1: #anime1 0(bad) 3(sn) 4(full)
+    if link.find("ani.gamer")!=-1: #baha 0(bad) 1(sn) 2(full)
+        return Baha.Link_Validate(link)
+    elif link.find("anime1.me")!=-1: #anime1 0(bad) 3(sn) 4(full)
         return Anime1.Link_Validate(link,chromeP)
     elif link.find("gimy.su")!=-1 or link.find("gimy.ai")!=-1: #gimy 0(bad) 5(sn) 6(full)
         return Gimy.Link_Validate(link)
@@ -46,7 +51,9 @@ def Get_Link_Type(link,chromeP='Default'):
         return AnimeOne.Link_Validate(link) #animeOne 0(bad) 7(sn) 8(full)
     elif link.find("meiju")!=-1:
         return Meiju.Link_Validate(link) #meiju 0(bad) 9(sn) 10(full)
-    return Baha.Link_Validate(link) #baha 0(bad) 1(sn) 2(full)
+    elif link.find("mmov")!=-1:
+        return Mmov.Link_Validate(link) #mmov 0(bad) 11(sn) 12(full)
+    return 0
 
 def Multiple_Download_Select(eps):
     try:
@@ -97,7 +104,7 @@ def Get_m3u8_url(link):
         target = target[target.find("url=")+4:]
 
     # level 2 parsing if exist
-    response = requests.get(target)
+    response = requests.get(target,verify=False)
     match = re.search(r".*\.m3u8", response.text, re.MULTILINE)
     if not match:
         return target
@@ -801,7 +808,7 @@ class Meiju:
         return 0
 
     def Get_Title_Link(site, get_link=True):
-        response = requests.get(site)
+        response = requests.get(site,verify=False)
         soup = bs(response.text, 'html.parser')
 
         title_tag = soup.find('title')
@@ -854,6 +861,79 @@ class Meiju:
             os.makedirs(downloadPath)
 
         title, link = Meiju.Get_Title_Link(site)
+        if not link or not title:
+            print("Connection Failed. Source may be invalid!\n")
+            return False
+        print(title)
+
+        Download_Chunks(Download_m3u8(link, TMP), TMP)
+
+        #ffmpeg convert
+        if MP4convert(tmpfile, downloadPath +'/'+ title + ".mp4"):
+            return False
+
+        #remove tmp files
+        shutil.rmtree(tmpPath)
+        return True
+
+class Mmov:
+    def Link_Validate(site):
+        title, link = Mmov.Get_Title_Link(site,False)
+        if link==1:
+            return 11
+        if link==2:
+            return 12
+        return 0
+
+    def Get_Title_Link(site, get_link=True):
+        response = requests.get(site)
+        soup = bs(response.text, 'html.parser')
+
+        title_tag = soup.find('title')
+        title = title_tag.text if title_tag else ''
+        if not title:
+            print("title not found")
+            return None, None
+
+
+        if "play" not in site:
+            # return title with all eps' links
+            pattern = r'(.+)免費線上看'
+            match = re.search(pattern, title)
+            if not match:
+                return None, None
+            title = match.group(1)
+            if get_link:
+                yun_all = soup.select('[class^="stui-content__playlist"]')
+                yun_name = [x.parent.find('h3').text for x in yun_all]
+                print('\n'.join([f"{i+1}.{y}" for i, y in enumerate(yun_name, 0)]))
+                try:
+                    sel = input(f"選擇來源(1~{len(yun_all)}): ")
+                    sel = int(sel)-1
+                    ele_list = yun_all[sel].select('li')
+                    links = ['https://www.mmov.app'+x.find('a')['href'] for x in ele_list]
+                except  Exception as e:
+                    print(str(e))
+                    return None, None
+            else:
+                links = 2
+        else:
+            title = title.split("-")[0]
+            links = Get_m3u8_url(site) if get_link else 1
+
+        return title, links
+
+    def Download_Request(site, TMP, downloadPath, max_threads=15):
+        #path
+        tmpPath = TMP+'/gimy'
+        tmpfile = tmpPath+'/0.m3u8'
+        if not os.path.isdir(tmpPath):
+            os.makedirs(tmpPath)
+        if not os.path.isdir(downloadPath):
+            os.makedirs(downloadPath)
+
+        print(site)
+        title, link = Mmov.Get_Title_Link(site)
         if not link or not title:
             print("Connection Failed. Source may be invalid!\n")
             return False
@@ -953,7 +1033,18 @@ if __name__=='__main__':
                     Meiju.Download_Request(eps[i], TMP, downloadPath)
             except Exception as e:
                 print("Error:", str(e))
-
+        elif linktype==11:
+            Mmov.Download_Request(link, TMP, downloadPath0)
+        elif linktype==12:
+            title, eps = Mmov.Get_Title_Link(link)
+            downloadPath = downloadPath0 + '/' + title + '/'
+            try:
+                st, ed = Multiple_Download_Select(eps)
+                for i in range(st,ed):
+                    Mmov.Download_Request(eps[i], TMP, downloadPath)
+            except Exception as e:
+                print("Error:", str(e))
+        
 
 
 
