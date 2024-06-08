@@ -2,7 +2,6 @@ import requests
 import browser_cookie3
 import urllib.request
 from bs4 import BeautifulSoup as bs
-from requests.packages.urllib3.exceptions import InsecureRequestWarning
 
 import json
 import re
@@ -24,6 +23,7 @@ from seleniumwire import webdriver
 from selenium.webdriver.chrome.service import Service as ChromeService
 from selenium.webdriver.common.by import By
 
+from requests.packages.urllib3.exceptions import InsecureRequestWarning
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
 def Get_Config():
@@ -76,7 +76,7 @@ def Multiple_Download_Select(eps):
         print("Error:", str(e))
         return None,None
 
-def Get_m3u8_url(link):
+def Get_m3u8_url(link, retry=3, retry_wait=30):
     chrome_options = webdriver.ChromeOptions()
     chrome_options.add_argument("--log-level=3")
     chrome_options.add_argument('--headless')
@@ -84,16 +84,16 @@ def Get_m3u8_url(link):
     driver = webdriver.Chrome(service=driver_service, options=chrome_options)
     driver.get(link)
     start_time=time.time()
-    retry = 0
+    retries = 0
     target = None
-    while not target: # wait for the request for 60s
-        if retry > 3:
+    while not target: # wait for the request for retry_wait seconds
+        if retries > retry:
             break
-        if time.time()-start_time>30:
+        if time.time()-start_time>retry_wait:
             driver.refresh()
             start_time=time.time()
-            retry+=1
-            print(f"No respond, page refresh {retry} time")
+            retries+=1
+            print(f"No respond, page refresh {retries} time")
             continue
         for req in driver.requests:
             if req.response and req.url.endswith(".m3u8") and (req.response.status_code==200):
@@ -104,7 +104,7 @@ def Get_m3u8_url(link):
         target = target[target.find("url=")+4:]
 
     # level 2 parsing if exist
-    response = requests.get(target,verify=False)
+    response = requests.get(target, verify=False)
     match = re.search(r".*\.m3u8", response.text, re.MULTILINE)
     if not match:
         return target
@@ -165,11 +165,11 @@ def Download_m3u8(link, TMP, session=None):
                     file.write(chunk)
     return chunklist
 
-def download_chunk(chunk, index, savepath, progress_bar=None, lock=None, showerr=True):
+def download_chunk(chunk, index, savepath, progress_bar=None, lock=None, showerr=True, timeout=60, retry=5):
     retries = 0
-    while retries < 5:
+    while retries < retry:
         try:
-            response = requests.get(chunk, stream=True, timeout=60)
+            response = requests.get(chunk, stream=True, timeout=timeout)
             if response.status_code == 200:
                 with open(f"{savepath}/{index}.ts", 'wb') as file:
                     for schunk in response.iter_content(chunk_size=1024):
@@ -826,10 +826,10 @@ class Meiju:
                 return None, None
             title = match.group(1)
             if get_link:
-                yun_all = soup.select('[class^="playIco"]')
+                tab = soup.select('[class^="tabs from-tabs"]')
+                yun_all = tab[0].select('[class^="playIco"]')
                 yun_name = [x.text for x in yun_all]
-                yun_name = yun_name[1:]
-                print('\n'.join([f"{i}.{y}" for i, y in enumerate(yun_name, 1)]))
+                print('\n'.join([f"{i+1}.{y}" for i, y in enumerate(yun_name, 0)]))
                 try:
                     sel = input(f"選擇來源(1~{len(yun_all)}): ")
                     sel = int(sel)-1
