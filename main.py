@@ -12,10 +12,10 @@ import time
 import os
 import shutil
 import pickle
+import ffmpeg
 
 from tqdm import tqdm,trange
 
-import subprocess
 import concurrent.futures
 import threading
 
@@ -217,38 +217,25 @@ def Download_Chunks(chunklist, TMP, max_threads=15):
         executor.shutdown()
         progress_bar.close()
 
-def MP4convert(m3u8_file, mp4_file, ffmpeg_path=None):
+def MP4convert(m3u8_file, mp4_file):
     print("mp4 generating..")
-    if not ffmpeg_path:
-        ffmpeg_path = os.getcwd()+"/Tmp/ffmpeg.exe"
-    input_file = m3u8_file.replace('\\','/')
-    output_file = mp4_file.replace('\\','/')
-    tmp_file = output_file.rsplit('/',1)[0]+'/tmp.mp4'
+    input_file = m3u8_file.replace('\\', '/')
+    output_file = mp4_file.replace('\\', '/')
+    tmp_file = output_file.rsplit('/', 1)[0] + '/tmp.mp4'
 
-    command = [
-        ffmpeg_path,
-        "-allowed_extensions",
-        "ALL",
-        "-y",
-        "-i",
-        input_file,
-        "-c",
-        "copy",
-        tmp_file
-    ]
     try:
-        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=os.getcwd())
-        stdout, stderr = process.communicate()
-
-        if process.returncode != 0:
-            print("FFmpeg process returned an error code:", process.returncode)
-            print("FFmpeg Output:", stdout.decode())
-            print("FFmpeg Error:", stderr.decode())
+        # Use ffmpeg to convert m3u8 to mp4
+        ffmpeg.input(input_file, allowed_extensions='ALL').output(tmp_file, c='copy').run(overwrite_output=True, quiet=True)
+        
+        # Rename the temporary file to the final output file
         os.rename(tmp_file, output_file)
         print("Finish!\n")
         return False # no error
+    except ffmpeg.Error as e:
+        print("Error running FFmpeg:", e.stderr.decode())
+        return True # error
     except Exception as e:
-        print("Error running FFmpeg:", str(e))
+        print("Unexpected error:", str(e))
         return True # error
 
 class Baha:
