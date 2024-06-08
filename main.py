@@ -237,6 +237,39 @@ def MP4convert(m3u8_file, mp4_file):
     except Exception as e:
         print("Unexpected error:", str(e))
         return True # error
+    
+def Download_sigle_ts(link, TMP, filename):
+    tmpPath = TMP+'/preview'
+    try: 
+        response = requests.get(link, timeout = 10)
+        target = re.findall(r'.+\.ts',response.text)[0]
+    except Exception as e:
+        print(f"Err: {str(e)}")
+        return
+
+    # chunk link prefix?
+    if not "http" in target:
+        sep = link.split('/')
+        prefix = 'https:/'
+        for i in range(2,len(sep)-1):
+            prefix =prefix+'/'+sep[i] if sep[i] not in target else prefix
+        target = prefix+'/'+ target
+
+    download_chunk(target, filename, tmpPath, timeout=10, retry=1)
+
+def Get_Video_Resolution(file_path):
+    try:
+        probe = ffmpeg.probe(file_path)
+        video_streams = [stream for stream in probe['streams'] if stream['codec_type'] == 'video']
+        if not video_streams:
+            raise ValueError('No video stream found')
+        
+        width = video_streams[0]['width']
+        height = video_streams[0]['height']
+        return [width, height]
+    except ffmpeg.Error as e:
+        print(f"Error occurred: {e.stderr.decode()}")
+        return [0,0]
 
 class Baha:
 
@@ -793,6 +826,34 @@ class Meiju:
             return 10
         
         return 0
+    
+    def Resolution_Check(src_all):
+        src_ep1 = []
+        for ele_list in src_all:
+            src_ep1.append('https://www.meijutt.cc'+ele_list.find('a')['href'])
+
+        m3u8_ep1 = []
+        for link in src_ep1:
+            try:
+                m3u8_ep1.append(Get_m3u8_url(link, retry=0, retry_wait=10))
+            except Exception as e:
+                m3u8_ep1.append("")
+        
+        res = []
+        for i in range(len(m3u8_ep1)):
+            if m3u8_ep1[i] != '':
+                Download_sigle_ts(m3u8_ep1[i], TMP, i)
+                if not os.path.isfile(TMP+'/preview/'+str(i)+'.ts'):
+                    res.append('(Invalid)')
+                    continue
+                resolution = Get_Video_Resolution(TMP+'/preview/'+str(i)+'.ts')
+                res.append(f"(Resolution:{resolution[0]}x{resolution[1]})")
+                os.remove(TMP+'/preview/'+str(i)+'.ts')
+            else:
+                res.append('(Invalid)')
+        return res
+
+
 
     def Get_Title_Link(site, get_link=True):
         response = requests.get(site,verify=False)
@@ -816,11 +877,21 @@ class Meiju:
                 tab = soup.select('[class^="tabs from-tabs"]')
                 yun_all = tab[0].select('[class^="playIco"]')
                 yun_name = [x.text for x in yun_all]
-                print('\n'.join([f"{i+1}.{y}" for i, y in enumerate(yun_name, 0)]))
+                src_all = soup.find_all(class_='mn_list_li_movie')
                 try:
+                    res_check = input(f"檢查畫質(1:是 2:否): ")
+                    if res_check == '1':
+                        print("檢查畫質...")
+                        resolutions = Meiju.Resolution_Check(src_all)
+                        showStr = '\n'
+                        for i in range(len(yun_name)):
+                            showStr += f"{i+1}.{yun_name[i]} {resolutions[i]}\n"
+                        print(showStr)
+                    else:
+                        print('\n'.join([f"{i+1}.{y}" for i, y in enumerate(yun_name, 0)]))
                     sel = input(f"選擇來源(1~{len(yun_all)}): ")
                     sel = int(sel)-1
-                    ele_list = soup.find_all(class_='mn_list_li_movie')[sel]
+                    ele_list = src_all[sel]
                     links = ['https://www.meijutt.cc'+x.find('a')['href'] for x in ele_list]
                 except  Exception as e:
                     print(str(e))
