@@ -481,9 +481,9 @@ class Anime1:
             return False
 
     def Link_Validate(link,chromeP='Default'):
-        if not Anime1.Set_Cookie(chromeP):
-            print("err: Cookie")
-            return 0
+        # if not Anime1.Set_Cookie(chromeP):
+        #     print("err: Cookie")
+        #     return 0
         
         title, link = Anime1.Get_Title_Link(link)
 
@@ -566,8 +566,8 @@ class Anime1:
             os.makedirs(downloadPath)
 
         # get local cookies
-        if not Anime1.Set_Cookie(chromeP):
-            return
+        # if not Anime1.Set_Cookie(chromeP):
+        #     return
 
         # get info for api
         title, target = Anime1.Get_Title_Link(site)
@@ -719,6 +719,33 @@ class Gimy:
         
         return 0
 
+    def Resolution_Check(yun_all, prefix):
+        src_ep1 = []
+        for yun in yun_all:
+            ele = yun.find_parent().find_next_sibling().find('a')
+            src_ep1.append(prefix + ele['href'])
+
+        m3u8_ep1 = []
+        for link in src_ep1:
+            try:
+                m3u8_ep1.append(Get_m3u8_url(link, retry=0, retry_wait=10))
+            except Exception as e:
+                m3u8_ep1.append("")
+        
+        res = []
+        for i in range(len(m3u8_ep1)):
+            if m3u8_ep1[i] != '':
+                Download_sigle_ts(m3u8_ep1[i], TMP, i)
+                if not os.path.isfile(TMP+'/preview/'+str(i)+'.ts'):
+                    res.append('(Invalid)')
+                    continue
+                resolution = Get_Video_Resolution(TMP+'/preview/'+str(i)+'.ts')
+                res.append(f"(Resolution:{resolution[0]}x{resolution[1]})")
+                os.remove(TMP+'/preview/'+str(i)+'.ts')
+            else:
+                res.append('(Invalid)')
+        return res
+
     def Get_Title_Link(site, get_link=True):
         response = requests.get(site)
         soup = bs(response.text, 'html.parser')
@@ -736,8 +763,17 @@ class Gimy:
             if get_link:
                 yun_all = soup.find_all(class_='gico')
                 yun_name = [x.text for x in yun_all]
-                print('\n'.join([f"{i}.{y}" for i, y in enumerate(yun_name, 1)]))
                 try:
+                    res_check = input(f"檢查畫質(1:是 2:否): ")
+                    if res_check == '1':
+                        print("檢查畫質...")
+                        resolutions = Gimy.Resolution_Check(yun_all, prefix)
+                        showStr = '\n'
+                        for i in range(len(yun_name)):
+                            showStr += f"{i+1}.{yun_name[i]} {resolutions[i]}\n"
+                        print(showStr)
+                    else:
+                        print('\n'.join([f"{i+1}.{y}" for i, y in enumerate(yun_name, 0)]))
                     sel = input(f"選擇來源(1~{len(yun_all)}): ")
                     sel = int(sel)-1
                     yun = yun_all[sel]
