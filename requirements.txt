@@ -1,6 +1,7 @@
 browser-cookie3==0.18.2
 requests==2.31.0
 tqdm==4.65.0
+blinker==1.7.0
 selenium-wire==5.1.0
 bs4==0.0.1
 ffmpeg-python==0.2.0
