@@ -41,9 +41,7 @@ def Get_Config():
     return downloadPath, Quality, chromeP
 
 def Get_Link_Type(link,chromeP='Default'):
-    if link.find("ani.gamer")!=-1: #baha 0(bad) 1(sn) 2(full)
-        return Baha.Link_Validate(link)
-    elif link.find("anime1.me")!=-1: #anime1 0(bad) 3(sn) 4(full)
+    if link.find("anime1.me")!=-1: #anime1 0(bad) 3(sn) 4(full)
         return Anime1.Link_Validate(link,chromeP)
     elif link.find("gimy.su")!=-1 or link.find("gimy.ai")!=-1: #gimy 0(bad) 5(sn) 6(full)
         return Gimy.Link_Validate(link)
@@ -53,6 +51,8 @@ def Get_Link_Type(link,chromeP='Default'):
         return Meiju.Link_Validate(link) #meiju 0(bad) 9(sn) 10(full)
     elif link.find("mmov")!=-1:
         return Mmov.Link_Validate(link) #mmov 0(bad) 11(sn) 12(full)
+    else:
+        return Baha.Link_Validate(link) #baha 0(bad) 1(sn) 2(full)
     return 0
 
 def Multiple_Download_Select(eps):
