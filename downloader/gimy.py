@@ -21,6 +21,7 @@ class Gimy:
         return 0
 
     def Resolution_Check(yun_all, prefix):
+        TMP = (os.getcwd()+"/Tmp").replace('\\','/')
         src_ep1 = []
         for yun in yun_all:
             ele = yun.find_parent().find_next_sibling().find('a')
