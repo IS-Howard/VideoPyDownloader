@@ -85,7 +85,7 @@ def Download_m3u8(link, TMP, session=None):
     chunk_sav = '' 
     i=0
     for line in response.text.split('\n'):
-        if line.startswith(".ts"):
+        if line.startswith("http") or line.endswith(".ts") or line.endswith(".jpeg"):
             chunklist.append(line)
             chunk_sav += str(i)+'.ts'
             i+=1
