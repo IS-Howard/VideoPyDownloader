@@ -70,7 +70,6 @@ def Download_m3u8(link, TMP, session=None):
         response = requests.get(link)
     else:
         response = session.get(link)
-    chunklist = []
 
     # check m3u8 key
     match = re.search(r'URI="([^"]+)"', response.text)
@@ -84,6 +83,7 @@ def Download_m3u8(link, TMP, session=None):
         file.write(response.text.encode("utf-8"))
     chunk_sav = '' 
     i=0
+    chunklist = []
     for line in response.text.split('\n'):
         if line.startswith("http") or line.endswith(".ts") or line.endswith(".jpeg"):
             chunklist.append(line)
@@ -191,18 +191,25 @@ def Download_sigle_ts(link, TMP, filename):
     tmpPath = TMP+'/preview'
     try: 
         response = requests.get(link, timeout = 10)
-        target = re.findall(r'.+\.ts',response.text)[0]
+        target = None
+        for line in response.text.split('\n'):
+            if line.startswith("http") or line.endswith(".ts") or line.endswith(".jpeg"):
+                target = line
+                break
+
+        if not target:
+            print("Err download sigle ts: target not found")
+            return
+        # prefix?
+        if not "http" in target:
+            sep = link.split('/')
+            prefix = 'https:/'
+            for i in range(2,len(sep)-1):
+                prefix =prefix+'/'+sep[i] if sep[i] not in target else prefix
+            target = prefix +'/'+ target
     except Exception as e:
         print(f"Err: {str(e)}")
         return
-
-    # chunk link prefix?
-    if not "http" in target:
-        sep = link.split('/')
-        prefix = 'https:/'
-        for i in range(2,len(sep)-1):
-            prefix =prefix+'/'+sep[i] if sep[i] not in target else prefix
-        target = prefix+'/'+ target
 
     download_chunk(target, filename, tmpPath, timeout=10, retry=1)
 
@@ -217,5 +224,5 @@ def Get_Video_Resolution(file_path):
         height = video_streams[0]['height']
         return [width, height]
     except ffmpeg.Error as e:
-        print(f"Error occurred: {e.stderr.decode()}")
+        print(f"Error resolve video resolution.")
         return [0,0]
