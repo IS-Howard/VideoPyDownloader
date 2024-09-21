@@ -80,7 +80,10 @@ def Get_m3u8_url(link, retry=3, retry_wait=30):
     chrome_options = webdriver.ChromeOptions()
     chrome_options.add_argument("--log-level=3")
     chrome_options.add_argument('--headless')
-    driver_service = ChromeService(executable_path=r"./Tmp/chromedriver.exe")
+    if os.name = "nt":
+        driver_service = ChromeService(executable_path=r"./Tmp/chromedriver.exe")
+    else:
+        driver_service = ChromeService(executable_path=r"./Tmp/chromedriver")
     driver = webdriver.Chrome(service=driver_service, options=chrome_options)
     driver.get(link)
     start_time=time.time()
