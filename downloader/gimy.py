@@ -20,7 +20,7 @@ class Gimy:
         
         return 0
 
-    def Resolution_Check(yun_all, prefix):
+    def Resolution_Check(yun_all, prefix, wait=10):
         TMP = (os.getcwd()+"/Tmp").replace('\\','/')
         src_ep1 = []
         for yun in yun_all:
@@ -30,7 +30,7 @@ class Gimy:
         m3u8_ep1 = []
         for link in src_ep1:
             try:
-                m3u8_ep1.append(Get_m3u8_url(link, retry=0, retry_wait=10))
+                m3u8_ep1.append(Get_m3u8_url(link, retry=0, retry_wait=wait))
             except Exception as e:
                 m3u8_ep1.append("")
         
@@ -68,8 +68,9 @@ class Gimy:
                 try:
                     res_check = input(f"檢查畫質(1:是 2:否): ")
                     if res_check == '1':
+                        waitStr = input(f"重新整理時長(秒):")
                         print("檢查畫質...")
-                        resolutions = Gimy.Resolution_Check(yun_all, prefix)
+                        resolutions = Gimy.Resolution_Check(yun_all, prefix, int(waitStr))
                         showStr = '\n'
                         for i in range(len(yun_name)):
                             showStr += f"{i+1}.{yun_name[i]} {resolutions[i]}\n"
