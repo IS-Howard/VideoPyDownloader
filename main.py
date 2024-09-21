@@ -122,7 +122,7 @@ def Download_m3u8(link, TMP, session=None):
         response = requests.get(link)
     else:
         response = session.get(link)
-    chunklist = re.findall(r'.+\.ts',response.text)
+    chunklist = []
 
     # check m3u8 key
     match = re.search(r'URI="([^"]+)"', response.text)
@@ -137,7 +137,8 @@ def Download_m3u8(link, TMP, session=None):
     chunk_sav = '' 
     i=0
     for line in response.text.split('\n'):
-        if line.endswith(".ts"):
+        if line.startswith(".ts"):
+            chunklist.append(line)
             chunk_sav += str(i)+'.ts'
             i+=1
         else:
