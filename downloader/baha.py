@@ -86,7 +86,10 @@ class Baha:
         chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
         chrome_options.add_extension("./Tmp/auto_recaptcha_solver.crx")
         chrome_options.add_extension("./Tmp/recaptcha_autoclick.crx")
-        driver_service = ChromeService(executable_path=r"./Tmp/chromedriver.exe")
+        if os.name == "nt":
+            driver_service = ChromeService(executable_path=r"./Tmp/chromedriver.exe")
+        else:
+            driver_service = ChromeService(executable_path=r"./Tmp/chromedriver")
         driver = webdriver.Chrome(service=driver_service, options=chrome_options)
 
         # login
