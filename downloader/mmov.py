@@ -45,7 +45,7 @@ class Mmov:
             title = title.split("-")[0]
             links = Get_m3u8_url(site) if get_link else 1
 
-        return title, links
+        return FileNameClean(title), links
 
     def Download_Request(site, TMP, downloadPath, max_threads=15):
         #path

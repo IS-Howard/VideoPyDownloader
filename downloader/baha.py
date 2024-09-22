@@ -22,8 +22,8 @@ class Baha:
         utitle = rx.findall(response.text)[0]
         title = json.loads('"%s"' %utitle)
         if not ep:
-            return title.rsplit(" ",1)[0]
-        return title
+            return FileNameClean(title.rsplit(" ",1)[0])
+        return FileNameClean(title)
     
     def Parse_Episodes(link):
         headers = Baha.headers

@@ -61,7 +61,7 @@ class AnimeOne:
                 # return sigle eq tile and api link
                 links = Get_m3u8_url(site)
 
-            return title, links
+            return FileNameClean(title), links
 
         except:
             print("Err: Get_Title_Link")

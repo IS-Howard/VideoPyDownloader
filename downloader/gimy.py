@@ -96,7 +96,7 @@ class Gimy:
             title = title.replace("線上看","")
             links = Gimy.Get_MUrl(site) if get_link else 1
 
-        return title, links
+        return FileNameClean(title), links
     
     def Get_MUrl(link):
         try:

@@ -226,3 +226,14 @@ def Get_Video_Resolution(file_path):
     except ffmpeg.Error as e:
         print(f"Error resolve video resolution.")
         return [0,0]
+
+def FileNameClean(filename):
+    if not filename:
+        return None
+    windows_invalid_chars = r'[<>:"/\\|?*]'
+    cleaned_filename = re.sub(windows_invalid_chars, '', filename)
+    cleaned_filename = cleaned_filename.replace('\0', '')
+    if len(cleaned_filename) > 255:
+        cleaned_filename = cleaned_filename[:255]
+    print(cleaned_filename)
+    return cleaned_filename

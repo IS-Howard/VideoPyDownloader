@@ -81,7 +81,7 @@ class Anime1:
                 target = target.get('data-apireq')
                 links = 'd='+target
 
-            return title, links
+            return FileNameClean(title), links
 
         except:
             print("Err: Get_Title_Link")
