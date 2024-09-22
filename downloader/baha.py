@@ -62,27 +62,59 @@ class Baha:
             return 0
         return linktype
 
-    def Set_Session(chromeP="Default"):
+    def Set_Session():
         ss = requests.Session()
 
         if os.path.isfile(Baha.cookie_file):
-            cookie_set = 2
+            cookie_set = True
         else:
-            cookie_set = 1
+            cookie_set = False
         
-        if cookie_set == 1:   # load from chrome
+        if not cookie_set: # login process
             try:
-                cookies = browser_cookie3.chrome(domain_name='gamer.com', cookie_file=os.getenv("APPDATA") + "/../Local/Google/Chrome/User Data/"+chromeP+"/Network/Cookies")
-                ss.cookies = cookies
-                pickle.dump(requests.utils.dict_from_cookiejar(cookies), open(Baha.cookie_file,"wb"))
+                Baha.Login()
             except Exception as e:
-                print(f"Error when loading cookies, please make sure tuning off chrome first!  err: {str(e)}")
+                print(f"Error when loggin in!  err: {str(e)}")
                 return None
-        elif cookie_set == 2: # load request cookie file
-            ss.cookies = requests.utils.cookiejar_from_dict(pickle.load(open(Baha.cookie_file,'rb')))
+        ss.cookies = requests.utils.cookiejar_from_dict(pickle.load(open(Baha.cookie_file,'rb')))
         return ss
+
+    def Login():
+        chrome_options = webdriver.ChromeOptions()
+        chrome_options.add_argument("--log-level=3")
+        chrome_options.add_argument('--headless')
+        chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+        chrome_options.add_extension("./Tmp/auto_recaptcha_solver.crx")
+        chrome_options.add_extension("./Tmp/recaptcha_autoclick.crx")
+        driver_service = ChromeService(executable_path=r"./Tmp/chromedriver.exe")
+        driver = webdriver.Chrome(service=driver_service, options=chrome_options)
+
+        # login
+        link = "https://user.gamer.com.tw/login.php"
+        driver.get(link)
+        username = input("請輸入帳號: ")
+        password = input("請輸入密碼: ")
+        time.sleep(1)
+        driver.find_element(By.XPATH, r'//*[@id="form-login"]/input[1]').send_keys(username)
+        driver.find_element(By.XPATH, r'//*[@id="form-login"]/div[1]/input').send_keys(password)
+        print("Passing recaptcha...")
+        time.sleep(20)
+        while True:
+            try :
+                driver.find_elements(By.CSS_SELECTOR, r'#btn-login')[0].click()
+                break
+            except:
+                time.sleep(3)
+                continue
+        print("Login success!")
+        time.sleep(5)
+
+        # save cookies
+        selenium_cookies = driver.get_cookies()
+        cookies_dict = {cookie['name']: cookie['value'] for cookie in selenium_cookies}
+        pickle.dump(cookies_dict, open(Baha.cookie_file,"wb"))
             
-    def Download_Request(sn, TMP, downloadPath, Quality="720", chromeP="Default"):
+    def Download_Request(sn, TMP, downloadPath, Quality="720"):
         # path initialize
         tmpPath = TMP+'/tmp'+sn
         if not os.path.isdir(tmpPath):
@@ -92,7 +124,7 @@ class Baha:
 
         # request config and cookie
         headers = Baha.headers
-        ss = Baha.Set_Session(chromeP=chromeP)
+        ss = Baha.Set_Session()
         if not ss:
             shutil.rmtree(tmpPath)
             return
@@ -109,8 +141,7 @@ class Baha:
         #Access
         response = ss.get('https://ani.gamer.com.tw/ajax/token.php?adID=undefined&sn='+sn+ "&device="+deviceID+"&hash="+Baha.RandomString(12), headers=headers)
         if(response.text.find("error")!=-1):
-            print(response.text)
-            print("Access Fail (Login in Chrome again may fix)")
+            print("Access Fail")
             #remove tmp files
             shutil.rmtree(tmpPath)
             os.remove(Baha.cookie_file)
@@ -151,7 +182,7 @@ class Baha:
                     Res = nextLine.strip()
                     break
         if Res == '':
-            print("Get List Link Fail (Login in Chrome again may fix)")
+            print("Get List Link Fail")
             #remove tmp files
             shutil.rmtree(tmpPath)
             os.remove(Baha.cookie_file)

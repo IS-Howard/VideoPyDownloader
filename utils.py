@@ -1,5 +1,4 @@
 import requests
-import browser_cookie3
 import urllib.request
 import json
 import re
@@ -235,5 +234,4 @@ def FileNameClean(filename):
     cleaned_filename = cleaned_filename.replace('\0', '')
     if len(cleaned_filename) > 255:
         cleaned_filename = cleaned_filename[:255]
-    print(cleaned_filename)
     return cleaned_filename

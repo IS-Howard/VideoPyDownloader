@@ -6,20 +6,7 @@ class Anime1:
     headers2 = {'Content-Type': 'application/x-www-form-urlencoded','User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36'}
     cookies = None
 
-    def Set_Cookie(chromeP='Default'):
-        try:
-            cookies = browser_cookie3.chrome(domain_name='.anime.me', cookie_file=os.getenv("APPDATA") + "/../Local/Google/Chrome/User Data/"+chromeP+"/Network/Cookies")
-            Anime1.cookies = cookies
-            return True
-        except:
-            print("Error when loading cookies, please make sure tuning off chrome first!")
-            return False
-
-    def Link_Validate(link,chromeP='Default'):
-        # if not Anime1.Set_Cookie(chromeP):
-        #     print("err: Cookie")
-        #     return 0
-        
+    def Link_Validate(link):
         title, link = Anime1.Get_Title_Link(link)
 
         if title==None:
@@ -95,14 +82,10 @@ class Anime1:
             res += name + "=" + cookies[name]#.decode()
         return res
 
-    def Download_Request(site, downloadPath, chromeP="Default"):
+    def Download_Request(site, downloadPath):
         #path
         if not os.path.isdir(downloadPath):
             os.makedirs(downloadPath)
-
-        # get local cookies
-        # if not Anime1.Set_Cookie(chromeP):
-        #     return
 
         # get info for api
         title, target = Anime1.Get_Title_Link(site)

@@ -12,18 +12,16 @@ def Get_Config():
         contents = file.read()
         download_path_match = re.search(r'Download Path:\s*(.*)', contents) # downloadPath = "C:/Users/"+os.getlogin()+"/Downloads/Video"
         quality_match = re.search(r'Quality:\s*(\d+)', contents)
-        chromeP_match = re.search(r'Chrome Profile:\s*(.+)', contents)
 
         # Extract the download path and quality if found
         downloadPath = download_path_match.group(1) if download_path_match else None
         Quality = quality_match.group(1) if quality_match else None
-        chromeP = chromeP_match.group(1) if chromeP_match else None
 
-    return downloadPath, Quality, chromeP
+    return downloadPath, Quality
 
-def Get_Link_Type(link,chromeP='Default'):
+def Get_Link_Type(link):
     if link.find("anime1.me")!=-1: #anime1 0(bad) 3(sn) 4(full)
-        return Anime1.Link_Validate(link,chromeP)
+        return Anime1.Link_Validate(link)
     elif link.find("gimy.su")!=-1 or link.find("gimy.ai")!=-1: #gimy 0(bad) 5(sn) 6(full)
         return Gimy.Link_Validate(link)
     elif link.find("anime1.one")!=-1:
@@ -61,16 +59,9 @@ if __name__=='__main__':
 
     # config
     TMP = (os.getcwd()+"/Tmp").replace('\\','/')
-    downloadPath0, Quality, chromeP = Get_Config()
+    downloadPath0, Quality = Get_Config()
 
-    go = True
-    # check chrome profile
-    # if not os.path.isfile(os.getenv("APPDATA") + "/../Local/Google/Chrome/User Data/"+chromeP+"/Network/Cookies"):
-    #     print("Cookie not exist, please check profile setting")
-    #     go = False
-
-
-    while(go):
+    while True:
         print("----------------------------------------")
         print("Baha-完整連結(全部下載)或sn(單集)")
         print("Anime1-頁面網址(全部)或(單集)")
@@ -79,11 +70,11 @@ if __name__=='__main__':
         link = input("輸入:")
         if link=='exit':
             break
-        linktype = Get_Link_Type(link,chromeP)
+        linktype = Get_Link_Type(link)
         if linktype==0:
             continue
         if linktype==1:
-            Baha.Download_Request(link, TMP, downloadPath0, Quality, chromeP)
+            Baha.Download_Request(link, TMP, downloadPath0, Quality)
         elif linktype==2:
             title = Baha.Get_Title(link, False)
             downloadPath = downloadPath0 + '/' + title
@@ -91,18 +82,18 @@ if __name__=='__main__':
             try:
                 st, ed = Multiple_Download_Select(eps)
                 for i in range(st,ed):
-                    Baha.Download_Request(eps[i], TMP, downloadPath, Quality, chromeP)
+                    Baha.Download_Request(eps[i], TMP, downloadPath, Quality)
             except Exception as e:
                 print("Error:", str(e))
         elif linktype==3:
-            Anime1.Download_Request(link, downloadPath0, chromeP)
+            Anime1.Download_Request(link, downloadPath0)
         elif linktype==4:
             title,eps = Anime1.Get_Title_Link(link)
             downloadPath = downloadPath0 + '/' + title + '/'
             try:
                 st, ed = Multiple_Download_Select(eps)
                 for i in range(st,ed):
-                    Anime1.Download_Request(eps[i], downloadPath, chromeP)
+                    Anime1.Download_Request(eps[i], downloadPath)
             except Exception as e:
                 print("Error:", str(e))
         elif linktype==5:
