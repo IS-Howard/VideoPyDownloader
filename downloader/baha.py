@@ -116,6 +116,7 @@ class Baha:
         selenium_cookies = driver.get_cookies()
         cookies_dict = {cookie['name']: cookie['value'] for cookie in selenium_cookies}
         pickle.dump(cookies_dict, open(Baha.cookie_file,"wb"))
+        pickle.dump(cookies_dict, open(Baha.cookie_file+".bak","wb"))
             
     def Download_Request(sn, TMP, downloadPath, Quality="720"):
         # path initialize

@@ -63,7 +63,7 @@ class Anime1:
                         link = post.find('a')['href']
                         links.append(link)
             else:
-            # return sigle eq tile and api link
+            # return single eq tile and api link
                 target = soup.find('video')
                 target = target.get('data-apireq')
                 links = 'd='+target

@@ -58,7 +58,7 @@ class AnimeOne:
                         link = post.find('a')['href']
                         links.append("https://anime1.one"+link)
             else:
-                # return sigle eq tile and api link
+                # return single eq tile and api link
                 links = Get_m3u8_url(site)
 
             return FileNameClean(title), links

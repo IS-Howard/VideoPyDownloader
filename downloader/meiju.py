@@ -35,7 +35,7 @@ class Meiju:
         res = []
         for i in range(len(m3u8_ep1)):
             if m3u8_ep1[i] != '':
-                Download_sigle_ts(m3u8_ep1[i], TMP, i)
+                Download_single_ts(m3u8_ep1[i], TMP, i)
                 if not os.path.isfile(TMP+'/preview/'+str(i)+'.ts'):
                     res.append('(Invalid)')
                     continue
@@ -90,7 +90,7 @@ class Meiju:
             else:
                 links = 2
         else:
-            # return sigle eq tile and api link
+            # return single eq tile and api link
             pattern = r'(.+)免费在线观看.+第(\d+)集'
             match = re.search(pattern, title)
             if not match:

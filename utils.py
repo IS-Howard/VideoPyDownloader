@@ -186,7 +186,7 @@ def MP4convert(m3u8_file, mp4_file):
         print("Unexpected error:", str(e))
         return True # error
     
-def Download_sigle_ts(link, TMP, filename):
+def Download_single_ts(link, TMP, filename):
     tmpPath = TMP+'/preview'
     try: 
         response = requests.get(link, timeout = 10)
@@ -197,7 +197,7 @@ def Download_sigle_ts(link, TMP, filename):
                 break
 
         if not target:
-            print("Err download sigle ts: target not found")
+            print("Err download single ts: target not found")
             return
         # prefix?
         if not "http" in target:
@@ -206,11 +206,11 @@ def Download_sigle_ts(link, TMP, filename):
             for i in range(2,len(sep)-1):
                 prefix =prefix+'/'+sep[i] if sep[i] not in target else prefix
             target = prefix +'/'+ target
+        download_chunk(target, filename, tmpPath, timeout=10, retry=1)
     except Exception as e:
         print(f"Err: {str(e)}")
         return
 
-    download_chunk(target, filename, tmpPath, timeout=10, retry=1)
 
 def Get_Video_Resolution(file_path):
     try:

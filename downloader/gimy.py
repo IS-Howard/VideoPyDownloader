@@ -37,7 +37,7 @@ class Gimy:
         res = []
         for i in range(len(m3u8_ep1)):
             if m3u8_ep1[i] != '':
-                Download_sigle_ts(m3u8_ep1[i], TMP, i)
+                Download_single_ts(m3u8_ep1[i], TMP, i)
                 if not os.path.isfile(TMP+'/preview/'+str(i)+'.ts'):
                     res.append('(Invalid)')
                     continue
@@ -91,7 +91,7 @@ class Gimy:
             else:
                 links = 2
         else:
-        # return sigle eq tile and api link
+        # return single eq tile and api link
             title = title.replace(" - Gimy 劇迷", "") #ep
             title = title.replace("線上看","")
             links = Gimy.Get_MUrl(site) if get_link else 1
