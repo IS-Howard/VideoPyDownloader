@@ -30,20 +30,20 @@ class Gimy:
         m3u8_ep1 = []
         for link in src_ep1:
             try:
-                m3u8_ep1.append(Get_m3u8_url(link, retry=0, retry_wait=wait))
+                m3u8_ep1.append(Get_m3u8_chunklist(link, retry=0, retry_wait=wait))
             except Exception as e:
                 m3u8_ep1.append("")
         
         res = []
         for i in range(len(m3u8_ep1)):
-            if m3u8_ep1[i] != '':
-                Download_single_ts(m3u8_ep1[i], TMP, i)
+            if len(m3u8_ep1[i]) > 0:
+                download_chunk(m3u8_ep1[i][0], i, TMP+'/preview', timeout=10, retry=1)
                 if not os.path.isfile(TMP+'/preview/'+str(i)+'.ts'):
                     res.append('(Invalid)')
                     continue
                 resolution = Get_Video_Resolution(TMP+'/preview/'+str(i)+'.ts')
                 res.append(f"(Resolution:{resolution[0]}x{resolution[1]})")
-                os.remove(TMP+'/preview/'+str(i)+'.ts')
+                #os.remove(TMP+'/preview/'+str(i)+'.ts')
             else:
                 res.append('(Invalid)')
         return res
@@ -94,32 +94,9 @@ class Gimy:
         # return single eq tile and api link
             title = title.replace(" - Gimy 劇迷", "") #ep
             title = title.replace("線上看","")
-            links = Gimy.Get_MUrl(site) if get_link else 1
+            links = Get_m3u8_chunklist(site) if get_link else 1
 
         return FileNameClean(title), links
-    
-    def Get_MUrl(link):
-        try:
-            target = None
-            if "gimy.su" in link:
-                response = requests.get(link)
-                match = re.search(r'"url":"([^"]+.m3u8)"',response.text)
-                target = match.group(1) if match else None
-                response = requests.get(target)
-                match = re.search(r".*\.m3u8", response.text, re.MULTILINE)
-                if not match:
-                    return target
-                hls_line = match.group()
-                target = target.replace("/index.m3u8","")
-                for s in hls_line.split('/'):
-                    if s not in target:
-                        target+='/'+s
-            elif "gimy.ai" in link:
-                target = Get_m3u8_url(link)
-            return target
-        except Exception as e:
-            print(str(e))
-            return None
 
     def Download_Request(site, TMP, downloadPath, max_threads=15):
         #path
@@ -130,13 +107,13 @@ class Gimy:
         if not os.path.isdir(downloadPath):
             os.makedirs(downloadPath)
 
-        title, link = Gimy.Get_Title_Link(site)
-        if not link or not title:
+        title, chunks = Gimy.Get_Title_Link(site)
+        if not chunks or not title:
             print("Connection Failed. Source may be invalid!\n")
             return False
         print(title)
 
-        Download_Chunks(Download_m3u8(link, TMP), TMP)
+        Download_Chunks(chunks, TMP)
 
         #ffmpeg convert
         if MP4convert(tmpfile, downloadPath +'/'+ title + ".mp4"):

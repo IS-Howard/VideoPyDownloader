@@ -2,10 +2,10 @@ import re
 import os
 from downloader.anime1 import Anime1
 from downloader.gimy import Gimy
-from downloader.animeOne import AnimeOne
-from downloader.meiju import Meiju
-from downloader.mmov import Mmov
 from downloader.baha import Baha
+# from downloader.animeOne import AnimeOne
+# from downloader.meiju import Meiju
+# from downloader.mmov import Mmov
 
 def Get_Config():
     with open('config', 'r') as file:

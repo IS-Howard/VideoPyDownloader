@@ -20,7 +20,7 @@ from selenium.webdriver.common.by import By
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
-def Get_m3u8_url(link, retry=3, retry_wait=30):
+def Get_m3u8_chunklist(link, retry=3, retry_wait=30, TMP='./Tmp'):
     chrome_options = webdriver.ChromeOptions()
     chrome_options.add_argument("--log-level=3")
     chrome_options.add_argument('--headless')
@@ -33,6 +33,7 @@ def Get_m3u8_url(link, retry=3, retry_wait=30):
     start_time=time.time()
     retries = 0
     target = None
+    reqNum = 0
     while not target: # wait for the request for retry_wait seconds
         if retries > retry:
             break
@@ -42,48 +43,48 @@ def Get_m3u8_url(link, retry=3, retry_wait=30):
             retries+=1
             print(f"No respond, page refresh {retries} time")
             continue
-        for req in driver.requests:
+        for i in range(reqNum, len(driver.requests)):
+            req = driver.requests[i]
             if req.response and req.url.endswith(".m3u8") and (req.response.status_code==200):
-                target=req.url
+                target=req
                 break
+        reqNum = len(driver.requests)-1
+    time.sleep(2)
+
+    if not target:
+        return []
+
+    # level 2 parsing
+    res = target.response.body.decode("utf-8")
+    match = re.search(r".*\.m3u8", res, re.MULTILINE)
+    if match:
+        for i in range(reqNum, len(driver.requests)):
+            req = driver.requests[i]
+            if req.response and req.url.endswith(".m3u8") and (req.response.status_code==200):
+                target=req
+                res = target.response.body.decode("utf-8")
     driver.quit()
-    if target.find("url=")!=-1: # meiju8 url
-        target = target[target.find("url=")+4:]
 
-    # level 2 parsing if exist
-    response = requests.get(target, verify=False)
-    match = re.search(r".*\.m3u8", response.text, re.MULTILINE)
-    if not match:
-        return target
-    hls_line = match.group()
-    target = target.replace("/index.m3u8","")
-    for s in hls_line.split('/'):
-        if s not in target:
-            target+='/'+s
-    return target
+    return Parse_m3u8(TMP, res, target.url)
 
-def Download_m3u8(link, TMP, session=None):
+def Parse_m3u8(TMP, resStr, link):
     tmpPath = TMP+'/gimy'
     tmpfile = tmpPath+'/0.m3u8'
-    if session == None:
-        response = requests.get(link)
-    else:
-        response = session.get(link)
 
     # check m3u8 key
-    match = re.search(r'URI="([^"]+)"', response.text)
+    match = re.search(r'URI="([^"]+)"', resStr)
     if match:
         keyURI = match.group(1)
     else:
         keyURI = None
 
     # save m3u8 list
-    with open(tmpPath+'/original.m3u8','wb') as file:
-        file.write(response.text.encode("utf-8"))
+    with open(tmpPath+'/original.m3u8','w') as file:
+        file.write(resStr)
     chunk_sav = '' 
     i=0
     chunklist = []
-    for line in response.text.split('\n'):
+    for line in resStr.split('\n'):
         if line.startswith("http") or line.endswith(".ts") or line.endswith(".jpeg"):
             chunklist.append(line)
             chunk_sav += str(i)+'.ts'
