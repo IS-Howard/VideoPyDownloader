@@ -3,8 +3,8 @@ import os
 from downloader.anime1 import Anime1
 from downloader.gimy import Gimy
 from downloader.baha import Baha
+from downloader.meiju import Meiju
 # from downloader.animeOne import AnimeOne
-# from downloader.meiju import Meiju
 # from downloader.mmov import Mmov
 
 def Get_Config():
@@ -27,7 +27,7 @@ def Get_Link_Type(link):
     elif link.find("anime1.one")!=-1:
         return AnimeOne.Link_Validate(link) #animeOne 0(bad) 7(sn) 8(full)
     elif link.find("meiju")!=-1:
-        return Meiju.Link_Validate(link) #meiju 0(bad) 9(sn) 10(full)
+        return Meiju.Link_Validate(link) #meiju 0(bad) 10(full)
     elif link.find("mmov")!=-1:
         return Mmov.Link_Validate(link) #mmov 0(bad) 11(sn) 12(full)
     else:
@@ -120,15 +120,13 @@ if __name__=='__main__':
                     AnimeOne.Download_Request(eps[i], TMP, downloadPath, sel)
             except Exception as e:
                 print("Error:", str(e))
-        elif linktype==9:
-            Meiju.Download_Request(link, TMP, downloadPath0)
         elif linktype==10:
-            title, eps = Meiju.Get_Title_Link(link)
-            downloadPath = downloadPath0 + '/' + title + '/'
             try:
+                title, eps = Meiju.Get_Title_Link(link)
+                downloadPath = downloadPath0 + '/' + title + '/'
                 st, ed = Multiple_Download_Select(eps)
                 for i in range(st,ed):
-                    Meiju.Download_Request(eps[i], TMP, downloadPath)
+                    Meiju.Download_Request(eps[i], title+f" 第{i+1}集", TMP, downloadPath)
             except Exception as e:
                 print("Error:", str(e))
         elif linktype==11:

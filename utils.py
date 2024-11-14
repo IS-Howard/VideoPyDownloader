@@ -45,10 +45,10 @@ def Get_m3u8_chunklist(link, retry=3, retry_wait=30, TMP='./Tmp'):
             continue
         for i in range(reqNum, len(driver.requests)):
             req = driver.requests[i]
-            if req.response and req.url.endswith(".m3u8") and (req.response.status_code==200):
+            if req.response and req.url.endswith(".m3u8"):
                 target=req
+                reqNum = i+1
                 break
-        reqNum = len(driver.requests)-1
     time.sleep(2)
 
     if not target:
@@ -58,12 +58,19 @@ def Get_m3u8_chunklist(link, retry=3, retry_wait=30, TMP='./Tmp'):
     res = target.response.body.decode("utf-8")
     match = re.search(r".*\.m3u8", res, re.MULTILINE)
     if match:
+        while driver.execute_script("return document.readyState") != "complete":
+            time.sleep(1)
         for i in range(reqNum, len(driver.requests)):
             req = driver.requests[i]
-            if req.response and req.url.endswith(".m3u8") and (req.response.status_code==200):
+            if req.response and req.url.endswith(".m3u8"):
                 target=req
                 res = target.response.body.decode("utf-8")
+                match = re.search(r".*\.m3u8", res, re.MULTILINE)
+                if match:
+                    continue
+                break
     driver.quit()
+    
 
     return Parse_m3u8(TMP, res, target.url)
 
