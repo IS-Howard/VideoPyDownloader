@@ -45,7 +45,7 @@ def Get_m3u8_chunklist(link, retry=3, retry_wait=30, TMP='./Tmp'):
             continue
         for i in range(reqNum, len(driver.requests)):
             req = driver.requests[i]
-            if req.response and req.url.endswith(".m3u8"):
+            if req.response and (req.url.endswith(".m3u8") or req.url.find(".m3u8")!=-1):
                 target=req
                 reqNum = i+1
                 break
