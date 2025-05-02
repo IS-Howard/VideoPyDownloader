@@ -4,6 +4,7 @@ from downloader.anime1 import Anime1
 from downloader.gimy import Gimy
 from downloader.baha import Baha
 from downloader.meiju import Meiju
+from downloader.hanju import Hanju
 # from downloader.animeOne import AnimeOne
 # from downloader.mmov import Mmov
 
@@ -30,6 +31,8 @@ def Get_Link_Type(link):
         return Meiju.Link_Validate(link) #meiju 0(bad) 10(full)
     elif link.find("mmov")!=-1:
         return Mmov.Link_Validate(link) #mmov 0(bad) 11(sn) 12(full)
+    elif link.find("321tw.com")!=-1: #hanju 0(bad) 14(full)
+        return Hanju.Link_Validate(link)
     else:
         return Baha.Link_Validate(link) #baha 0(bad) 1(sn) 2(full)
     return 0
@@ -138,6 +141,15 @@ if __name__=='__main__':
                 st, ed = Multiple_Download_Select(eps)
                 for i in range(st,ed):
                     Mmov.Download_Request(eps[i], TMP, downloadPath)
+            except Exception as e:
+                print("Error:", str(e))
+        elif linktype==14:
+            try:
+                title, eps = Hanju.Get_Title_Link(link)
+                downloadPath = downloadPath0 + '/' + title + '/'
+                st, ed = Multiple_Download_Select(eps)
+                for i in range(st,ed):
+                    Hanju.Download_Request(eps[i], title+f" 第{i+1}集", TMP, downloadPath)
             except Exception as e:
                 print("Error:", str(e))
         
