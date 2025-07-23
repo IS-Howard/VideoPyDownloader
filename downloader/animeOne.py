@@ -69,7 +69,7 @@
 
 #     def Download_Request(site, TMP, downloadPath, max_threads=15, sel_src=1):
 #         #path
-#         tmpPath = TMP+'/gimy'
+#         tmpPath = TMP
 #         tmpfile = tmpPath+'/0.m3u8'
 #         if not os.path.isdir(tmpPath):
 #             os.makedirs(tmpPath)

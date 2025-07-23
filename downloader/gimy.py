@@ -28,22 +28,50 @@ class Gimy:
             src_ep1.append(prefix + ele['href'])
 
         m3u8_ep1 = []
-        for link in src_ep1:
+        for i, link in enumerate(src_ep1):
             try:
-                m3u8_ep1.append(Get_m3u8_chunklist(link, retry=0, retry_wait=wait))
+                from utils import DEBUG
+                if DEBUG: print(f"Debug: Getting m3u8 for source {i}: {link}")
+                chunklist = Get_m3u8_chunklist(link, retry=0, retry_wait=wait)
+                if DEBUG: print(f"Debug: Got {len(chunklist)} chunks for source {i}")
+                m3u8_ep1.append(chunklist)
             except Exception as e:
+                if DEBUG: print(f"Debug: Failed to get m3u8 for source {i}: {e}")
                 m3u8_ep1.append("")
         
         res = []
         for i in range(len(m3u8_ep1)):
             if len(m3u8_ep1[i]) > 0:
-                download_chunk(m3u8_ep1[i][0], i, TMP+'/preview', timeout=10, retry=1)
-                if not os.path.isfile(TMP+'/preview/'+str(i)+'.ts'):
+                try:
+                    if not os.path.isdir(TMP+'/preview'):
+                        os.makedirs(TMP+'/preview')
+                    from utils import DEBUG
+                    if DEBUG: print(f"Debug: Downloading chunk for source {i}: {m3u8_ep1[i][0]}")
+                    download_chunk(m3u8_ep1[i][0], i, TMP+'/preview', timeout=10, retry=1)
+                    if not os.path.isfile(TMP+'/preview/'+str(i)+'.ts'):
+                        if DEBUG: print(f"Debug: File not found after download: {TMP+'/preview/'+str(i)+'.ts'}")
+                        res.append('(Invalid)')
+                        continue
+                    file_size = os.path.getsize(TMP+'/preview/'+str(i)+'.ts')
+                    if DEBUG: print(f"Debug: Downloaded file size: {file_size} bytes")
+                    if file_size == 0:
+                        if DEBUG: print(f"Debug: Downloaded file is empty")
+                        res.append('(Invalid)')
+                        continue
+                    resolution = Get_Video_Resolution(TMP+'/preview/'+str(i)+'.ts')
+                    if DEBUG: print(f"Debug: Resolution: {resolution}")
+                    if resolution[0] == 0 and resolution[1] == 0:
+                        res.append('(Invalid)')
+                    else:
+                        res.append(f"(Resolution:{resolution[0]}x{resolution[1]})")
+                    # try:
+                    #     os.remove(TMP+'/preview/'+str(i)+'.ts')
+                    # except:
+                    #     pass
+                except Exception as e:
+                    from utils import DEBUG
+                    if DEBUG: print(f"Debug: Resolution check failed for source {i}: {e}")
                     res.append('(Invalid)')
-                    continue
-                resolution = Get_Video_Resolution(TMP+'/preview/'+str(i)+'.ts')
-                res.append(f"(Resolution:{resolution[0]}x{resolution[1]})")
-                #os.remove(TMP+'/preview/'+str(i)+'.ts')
             else:
                 res.append('(Invalid)')
         return res
@@ -78,6 +106,9 @@ class Gimy:
                     else:
                         print('\n'.join([f"{i+1}.{y}" for i, y in enumerate(yun_name, 0)]))
                     sel = input(f"選擇來源(1~{len(yun_all)}): ")
+                    if not sel.strip():
+                        print("未選擇來源")
+                        return None, None
                     sel = int(sel)-1
                     yun = yun_all[sel]
                     ele_list =  yun.find_parent().find_next_sibling().find_all('a')
@@ -109,7 +140,9 @@ class Gimy:
 
         title, chunks = Gimy.Get_Title_Link(site)
         if not chunks or not title:
-            print("Connection Failed. Source may be invalid!\n")
+            print(f"Connection Failed. Source may be invalid!")
+            from utils import DEBUG
+            if DEBUG: print(f"Debug: title='{title}', chunks='{chunks}'\n")
             return False
         print(title)
 

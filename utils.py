@@ -20,6 +20,9 @@ from selenium.webdriver.common.by import By
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
+# Debug flag - set to True to show debug messages
+DEBUG = False
+
 def Get_m3u8_chunklist(link, retry=3, retry_wait=30, TMP='./Tmp'):
     chrome_options = webdriver.ChromeOptions()
     chrome_options.add_argument("--log-level=3")
@@ -30,10 +33,24 @@ def Get_m3u8_chunklist(link, retry=3, retry_wait=30, TMP='./Tmp'):
         driver_service = ChromeService(executable_path=r"./Tmp/chromedriver")
     driver = webdriver.Chrome(service=driver_service, options=chrome_options)
     driver.get(link)
+    
+    # Wait for page to load and try to trigger video player
+    time.sleep(3)
+    try:
+        # Try to click play button or video element
+        play_buttons = driver.find_elements(By.CSS_SELECTOR, "button[aria-label*='play'], .play-btn, #play, .vjs-play-control, video")
+        if play_buttons:
+            if DEBUG: print(f"Debug: Found {len(play_buttons)} potential play elements, clicking first one")
+            play_buttons[0].click()
+            time.sleep(2)
+    except Exception as e:
+        if DEBUG: print(f"Debug: Could not click play button: {e}")
+    
     start_time=time.time()
     retries = 0
     target = None
     reqNum = 0
+    if DEBUG: print(f"Debug: Waiting for m3u8 requests...")
     while not target: # wait for the request for retry_wait seconds
         if retries > retry:
             break
@@ -43,19 +60,62 @@ def Get_m3u8_chunklist(link, retry=3, retry_wait=30, TMP='./Tmp'):
             retries+=1
             print(f"No respond, page refresh {retries} time")
             continue
+        
+        # Debug: show all requests
+        if DEBUG: print(f"Debug: Found {len(driver.requests)} total requests")
         for i in range(reqNum, len(driver.requests)):
             req = driver.requests[i]
+            if DEBUG: print(f"Debug: Request {i}: {req.url}")
             if req.response and (req.url.endswith(".m3u8") or req.url.find(".m3u8")!=-1):
                 target=req
                 reqNum = i+1
+                if DEBUG: print(f"Debug: Found m3u8 request: {req.url}")
+                
+                # Check if this is a PHP script with URL parameter
+                if "artplayer" in req.url and "url=" in req.url:
+                    import urllib.parse
+                    parsed_url = urllib.parse.urlparse(req.url)
+                    params = urllib.parse.parse_qs(parsed_url.query)
+                    if 'url' in params:
+                        actual_m3u8_url = params['url'][0]
+                        if DEBUG: print(f"Debug: Extracting actual m3u8 URL: {actual_m3u8_url}")
+                        
+                        # Fetch the actual m3u8 content directly
+                        try:
+                            response = requests.get(actual_m3u8_url, timeout=30)
+                            if response.status_code == 200:
+                                if DEBUG: print(f"Debug: Successfully fetched actual m3u8, length: {len(response.text)}")
+                                # Create a mock target with the real content
+                                class MockTarget:
+                                    def __init__(self, url, content):
+                                        self.url = url
+                                        self.response = MockResponse(content.encode('utf-8'))
+                                
+                                class MockResponse:
+                                    def __init__(self, body):
+                                        self.body = body
+                                
+                                target = MockTarget(actual_m3u8_url, response.text)
+                                break
+                        except Exception as e:
+                            if DEBUG: print(f"Debug: Failed to fetch actual m3u8: {e}")
+                
                 break
     time.sleep(2)
 
     if not target:
+        if DEBUG: print("Debug: No m3u8 requests found in browser traffic")
         return []
 
     # level 2 parsing
-    res = target.response.body.decode("utf-8")
+    body = target.response.body
+    try:
+        res = body.decode("utf-8")
+    except UnicodeDecodeError:
+        try:
+            res = body.decode("latin-1")
+        except UnicodeDecodeError:
+            res = body.decode("utf-8", errors="replace")
     match = re.search(r".*\.m3u8", res, re.MULTILINE)
     if match:
         while driver.execute_script("return document.readyState") != "complete":
@@ -64,14 +124,22 @@ def Get_m3u8_chunklist(link, retry=3, retry_wait=30, TMP='./Tmp'):
             req = driver.requests[i]
             if req.response and req.url.endswith(".m3u8"):
                 target=req
-                res = target.response.body.decode("utf-8")
+                body = target.response.body
+                try:
+                    res = body.decode("utf-8")
+                except UnicodeDecodeError:
+                    try:
+                        res = body.decode("latin-1")
+                    except UnicodeDecodeError:
+                        res = body.decode("utf-8", errors="replace")
                 match = re.search(r".*\.m3u8", res, re.MULTILINE)
                 if match:
                     continue
                 break
     driver.quit()
     
-
+    if DEBUG: print(f"Debug: About to parse m3u8 content, length: {len(res)}")
+    if DEBUG: print(f"Debug: First 200 chars of m3u8 content: {res[:200]}")
     return Parse_m3u8(TMP, res, target.url)
 
 def Parse_m3u8(TMP, resStr, link):
@@ -86,7 +154,7 @@ def Parse_m3u8(TMP, resStr, link):
         keyURI = None
 
     # save m3u8 list
-    with open(tmpPath+'/original.m3u8','w') as file:
+    with open(tmpPath+'/original.m3u8','w', encoding='utf-8') as file:
         file.write(resStr)
     chunk_sav = '' 
     i=0
@@ -94,6 +162,7 @@ def Parse_m3u8(TMP, resStr, link):
     for line in resStr.split('\n'):
         if line.startswith("http") or line.endswith(".ts") or line.endswith(".jpeg"):
             chunklist.append(line)
+            if DEBUG: print(f"Debug: Found chunk: {line}")
             chunk_sav += str(i)+'.ts'
             i+=1
         else:
@@ -101,16 +170,18 @@ def Parse_m3u8(TMP, resStr, link):
                 line = line.replace(keyURI,'./key.key')
             chunk_sav += line
         chunk_sav += '\n'
-    with open(tmpfile,"w") as file:
+    with open(tmpfile,"w", encoding='utf-8') as file:
         file.write(chunk_sav)
 
     # chunk link prefix?
-    if not "http" in chunklist[0]:
+    if chunklist and not "http" in chunklist[0]:
         sep = link.split('/')
         prefix = 'https:/'
         for i in range(2,len(sep)-1):
             prefix =prefix+'/'+sep[i] if sep[i] not in chunklist[0] else prefix
         chunklist = [prefix+'/'+x for x in chunklist]
+    
+    if DEBUG: print(f"Debug: Final chunklist has {len(chunklist)} items")
     # Download key?
     if keyURI:
         prefix = link.replace("index.m3u8", "")
