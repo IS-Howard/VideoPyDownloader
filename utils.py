@@ -1,5 +1,6 @@
 import requests
 import urllib.request
+import urllib.parse
 import json
 import re
 import random
@@ -8,14 +9,13 @@ import os
 import shutil
 import pickle
 import ffmpeg
+import tempfile
 import concurrent.futures
 import threading
 from datetime import datetime
 from bs4 import BeautifulSoup as bs
 from tqdm import tqdm,trange
-from seleniumwire import webdriver
-from selenium.webdriver.chrome.service import Service as ChromeService
-from selenium.webdriver.common.by import By
+from seleniumbase import Driver
 
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
@@ -23,28 +23,13 @@ requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 # Debug flag - set to True to show debug messages
 DEBUG = False
 
+global_headers = {
+    'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36'
+}
+
 def Get_m3u8_chunklist(link, retry=3, retry_wait=30, TMP='./Tmp'):
-    chrome_options = webdriver.ChromeOptions()
-    chrome_options.add_argument("--log-level=3")
-    chrome_options.add_argument('--headless')
-    if os.name == "nt":
-        driver_service = ChromeService(executable_path=r"./Tmp/chromedriver.exe")
-    else:
-        driver_service = ChromeService(executable_path=r"./Tmp/chromedriver")
-    driver = webdriver.Chrome(service=driver_service, options=chrome_options)
-    driver.get(link)
-    
-    # Wait for page to load and try to trigger video player
-    time.sleep(3)
-    try:
-        # Try to click play button or video element
-        play_buttons = driver.find_elements(By.CSS_SELECTOR, "button[aria-label*='play'], .play-btn, #play, .vjs-play-control, video")
-        if play_buttons:
-            if DEBUG: print(f"Debug: Found {len(play_buttons)} potential play elements, clicking first one")
-            play_buttons[0].click()
-            time.sleep(2)
-    except Exception as e:
-        if DEBUG: print(f"Debug: Could not click play button: {e}")
+    driver = Driver(headless2=True, wire=True)
+    driver.open(link)
     
     start_time=time.time()
     retries = 0
@@ -82,7 +67,7 @@ def Get_m3u8_chunklist(link, retry=3, retry_wait=30, TMP='./Tmp'):
                         
                         # Fetch the actual m3u8 content directly
                         try:
-                            response = requests.get(actual_m3u8_url, timeout=30)
+                            response = requests.get(actual_m3u8_url, timeout=30, headers=global_headers)
                             if response.status_code == 200:
                                 if DEBUG: print(f"Debug: Successfully fetched actual m3u8, length: {len(response.text)}")
                                 # Create a mock target with the real content
@@ -109,13 +94,7 @@ def Get_m3u8_chunklist(link, retry=3, retry_wait=30, TMP='./Tmp'):
 
     # level 2 parsing
     body = target.response.body
-    try:
-        res = body.decode("utf-8")
-    except UnicodeDecodeError:
-        try:
-            res = body.decode("latin-1")
-        except UnicodeDecodeError:
-            res = body.decode("utf-8", errors="replace")
+    res = decompress_and_decode(body)
     match = re.search(r".*\.m3u8", res, re.MULTILINE)
     if match:
         while driver.execute_script("return document.readyState") != "complete":
@@ -185,18 +164,44 @@ def Parse_m3u8(TMP, resStr, link):
     # Download key?
     if keyURI:
         prefix = link.replace("index.m3u8", "")
-        response = requests.get(prefix+keyURI, stream=True)
+        response = requests.get(prefix+keyURI, stream=True, headers=global_headers)
         with open(tmpPath+'/key.key','wb') as file:
             for chunk in response.iter_content(chunk_size=1024):
                 if chunk:
                     file.write(chunk)
     return chunklist
 
+
+def decompress_and_decode(body):
+    """Helper function to decompress gzip if needed and decode to string"""
+    try:
+        # Check if content is gzip compressed
+        if body.startswith(b'\x1f\x8b'):
+            import gzip
+            body = gzip.decompress(body)
+            if DEBUG: print("Debug: Decompressed gzip content")
+        
+        # Try different encodings
+        try:
+            return body.decode("utf-8")
+        except UnicodeDecodeError:
+            try:
+                return body.decode("latin-1")
+            except UnicodeDecodeError:
+                return body.decode("utf-8", errors="replace")
+    except Exception as e:
+        if DEBUG: print(f"Debug: Error in decompress_and_decode: {e}")
+        # Fallback to original body if decompression fails
+        try:
+            return body.decode("utf-8", errors="replace")
+        except:
+            return str(body)
+
 def download_chunk(chunk, index, savepath, progress_bar=None, lock=None, showerr=True, timeout=60, retry=5):
     retries = 0
     while retries < retry:
         try:
-            response = requests.get(chunk, stream=True, timeout=timeout)
+            response = requests.get(chunk, stream=True, timeout=timeout, headers=global_headers)
             if response.status_code == 200:
                 with open(f"{savepath}/{index}.ts", 'wb') as file:
                     for schunk in response.iter_content(chunk_size=1024):
@@ -250,25 +255,77 @@ def MP4convert(m3u8_file, mp4_file):
     output_file = mp4_file.replace('\\', '/')
     tmp_file = output_file.rsplit('/', 1)[0] + '/tmp.mp4'
 
+    def cleanup_tmp():
+        if os.path.exists(tmp_file):
+            try:
+                os.remove(tmp_file)
+            except:
+                pass
+
     try:
-        # Use ffmpeg to convert m3u8 to mp4
+        # First attempt: Original method
         ffmpeg.input(input_file, allowed_extensions='ALL').output(tmp_file, c='copy').run(overwrite_output=True, quiet=True)
-        
-        # Rename the temporary file to the final output file
         os.rename(tmp_file, output_file)
         print("Finish!\n")
-        return False # no error
-    except ffmpeg.Error as e:
-        print("Error running FFmpeg:", e.stderr.decode())
-        return True # error
+        return False
+        
+    except ffmpeg.Error:
+        print("First attempt failed, trying individual segment processing...")
+        cleanup_tmp()
+        
+        try:
+            # Read m3u8 and extract .ts filenames
+            m3u8_dir = os.path.dirname(input_file)
+            with open(input_file.replace('/', '\\'), 'r') as f:
+                m3u8_content = f.read()
+            
+            ts_files = re.findall(r'(\d+\.ts)', m3u8_content)
+            print(f"Found {len(ts_files)} segments")
+            
+            if not ts_files:
+                print("No .ts files found in m3u8")
+                return True
+            
+            # Create a temporary file list for concat demuxer
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+                concat_file = f.name
+                for ts_file in ts_files:
+                    ts_path = os.path.join(m3u8_dir, ts_file).replace('\\', '/')
+                    f.write(f"file '{ts_path}'\n")
+            
+            try:
+                # Use concat demuxer
+                print(f"Concatenating {len(ts_files)} segments using concat demuxer...")
+                ffmpeg.input(concat_file, format='concat', safe=0).output(
+                    tmp_file,
+                    c='copy'
+                ).run(overwrite_output=True, quiet=False)
+                
+                os.rename(tmp_file, output_file)
+                print("Finish!\n")
+                return False
+                
+            finally:
+                # Clean up the temporary concat file
+                try:
+                    os.unlink(concat_file)
+                except:
+                    pass
+            
+        except Exception as e2:
+            print(f"Individual segment processing failed: {str(e2)}")
+            cleanup_tmp()
+            return True
+            
     except Exception as e:
-        print("Unexpected error:", str(e))
-        return True # error
+        print(f"Unexpected error: {str(e)}")
+        cleanup_tmp()
+        return True
     
 def Download_single_ts(link, TMP, filename):
     tmpPath = TMP+'/preview'
     try: 
-        response = requests.get(link, timeout = 10)
+        response = requests.get(link, timeout=10, headers=global_headers)
         target = None
         for line in response.text.split('\n'):
             if line.startswith("http") or line.endswith(".ts") or line.endswith(".jpeg"):
@@ -293,22 +350,35 @@ def Download_single_ts(link, TMP, filename):
 
 def Get_Video_Resolution(file_path):
     try:
-        probe = ffmpeg.probe(file_path)
-        video_streams = [stream for stream in probe['streams'] if stream['codec_type'] == 'video']
-        if not video_streams:
-            raise ValueError('No video stream found')
+        if not os.path.exists(file_path):
+            return {'error': 'File does not exist'}
         
-        width = video_streams[0]['width']
-        height = video_streams[0]['height']
-        return [width, height]
-    except ffmpeg.Error as e:
-        print(f"Error resolve video resolution.")
-        return [0,0]
+        file_size_bytes = os.path.getsize(file_path)
+        file_size_mb = file_size_bytes / (1024 * 1024)
+        
+        # For .ts segments, estimate quality based on file size
+        # These are rough estimates for typical segment lengths (2-10 seconds)
+        
+        if file_size_mb > 5:
+            quality = "Very High (likely 1080p+ or long segment)"
+        elif file_size_mb > 2:
+            quality = "High (likely 720p-1080p)"
+        elif file_size_mb > 1:
+            quality = "Medium (likely 480p-720p)"
+        elif file_size_mb > 0.5:
+            quality = "Low-Medium (likely 360p-480p)"
+        else:
+            quality = "Low (likely 240p-360p or very short)"
+        
+        return quality
+        
+    except Exception as e:
+        return 'error: '+str(e)
 
 def FileNameClean(filename):
     if not filename:
         return None
-    windows_invalid_chars = r'[<>:"/\\|?*]'
+    windows_invalid_chars = r'[<>:"/\\|?*\s]'
     cleaned_filename = re.sub(windows_invalid_chars, '', filename)
     cleaned_filename = cleaned_filename.replace('\0', '')
     if len(cleaned_filename) > 255:

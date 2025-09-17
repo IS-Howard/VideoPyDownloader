@@ -58,12 +58,8 @@ class Gimy:
                         if DEBUG: print(f"Debug: Downloaded file is empty")
                         res.append('(Invalid)')
                         continue
-                    resolution = Get_Video_Resolution(TMP+'/preview/'+str(i)+'.ts')
-                    if DEBUG: print(f"Debug: Resolution: {resolution}")
-                    if resolution[0] == 0 and resolution[1] == 0:
-                        res.append('(Invalid)')
-                    else:
-                        res.append(f"(Resolution:{resolution[0]}x{resolution[1]})")
+                    quality = Get_Video_Resolution(TMP+'/preview/'+str(i)+'.ts')
+                    res.append(f"(Resolution:{quality})")
                     # try:
                     #     os.remove(TMP+'/preview/'+str(i)+'.ts')
                     # except:

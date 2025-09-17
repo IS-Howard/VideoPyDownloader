@@ -80,35 +80,34 @@ class Baha:
         return ss
 
     def Login():
-        chrome_options = webdriver.ChromeOptions()
-        chrome_options.add_argument("--log-level=3")
-        chrome_options.add_argument('--headless')
-        chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-        chrome_options.add_extension("./Tmp/auto_recaptcha_solver.crx")
-        chrome_options.add_extension("./Tmp/recaptcha_autoclick.crx")
-        if os.name == "nt":
-            driver_service = ChromeService(executable_path=r"./Tmp/chromedriver.exe")
-        else:
-            driver_service = ChromeService(executable_path=r"./Tmp/chromedriver")
-        driver = webdriver.Chrome(service=driver_service, options=chrome_options)
+        driver = Driver(headless2=True, extension_dir='./Tmp/extension')
 
         # login
         link = "https://user.gamer.com.tw/login.php"
-        driver.get(link)
+        driver.open(link)
         username = input("請輸入帳號: ")
         password = input("請輸入密碼: ")
-        time.sleep(1)
-        driver.find_element(By.XPATH, r'//*[@id="form-login"]/input[1]').send_keys(username)
-        driver.find_element(By.XPATH, r'//*[@id="form-login"]/div[1]/input').send_keys(password)
-        print("Passing recaptcha...")
-        time.sleep(20)
-        while True:
-            try :
-                driver.find_elements(By.CSS_SELECTOR, r'#btn-login')[0].click()
-                break
-            except:
-                time.sleep(3)
-                continue
+        driver.type('#form-login > input:nth-child(1)', username)
+        driver.type('#form-login > div.password-box > input', password)
+        # pass recaptcha
+        wait = False
+        if driver.is_element_visible('iframe[title="reCAPTCHA"]'):
+            driver.switch_to_frame('iframe[title="reCAPTCHA"]')
+            time.sleep(1)
+            driver.click('#recaptcha-anchor')
+            while not driver.is_element_visible('.recaptcha-checkbox-checked'):
+                driver.switch_to_default_window()
+                if driver.is_element_visible('iframe[title="recaptcha challenge expires in two minutes"]') and not wait:
+                    driver.switch_to_frame('iframe[title="recaptcha challenge expires in two minutes"]')
+                    driver.wait_for_element('.help-button-holder', timeout=5)
+                    driver.click('.help-button-holder')
+                    print("Clicked reCAPTCHA solve button")
+                    wait = True
+                time.sleep(1)
+                if driver.is_element_visible('iframe[title="reCAPTCHA"]'):
+                    driver.switch_to_frame('iframe[title="reCAPTCHA"]')
+        driver.switch_to_default_window()
+        driver.click('#btn-login')
         print("Login success!")
         time.sleep(5)
 
@@ -172,10 +171,14 @@ class Baha:
         response = ss.get('https://ani.gamer.com.tw/ajax/m3u8.php?sn='+sn+'&device='+deviceID, headers=headers)
         load = json.loads(response.text)
         MUrl = load["src"]
+        if DEBUG:
+            print("MUrl:", MUrl)
 
         #Get link of M3U8 list
         response = ss.get(MUrl, headers=headers)
         sr = response.text
+        if DEBUG:
+            print("res:", sr)
         lines = sr.split('\n')
         Res = ''
         for line in lines:
