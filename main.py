@@ -8,18 +8,6 @@ from downloader.hanju import Hanju
 # from downloader.animeOne import AnimeOne
 # from downloader.mmov import Mmov
 
-def Get_Config():
-    with open('config', 'r') as file:
-        contents = file.read()
-        download_path_match = re.search(r'Download Path:\s*(.*)', contents) # downloadPath = "C:/Users/"+os.getlogin()+"/Downloads/Video"
-        quality_match = re.search(r'Quality:\s*(\d+)', contents)
-
-        # Extract the download path and quality if found
-        downloadPath = download_path_match.group(1) if download_path_match else None
-        Quality = quality_match.group(1) if quality_match else None
-
-    return downloadPath, Quality
-
 def Get_Link_Type(link):
     if link.find("anime1.me")!=-1: #anime1 0(bad) 3(sn) 4(full)
         return Anime1.Link_Validate(link)
@@ -62,15 +50,11 @@ if __name__=='__main__':
 
     # config
     TMP = (os.getcwd()+"/Tmp").replace('\\','/')
-    downloadPath0, Quality = Get_Config()
+    downloadPath0 = (os.getcwd()+"/Video").replace('\\','/')
+    Quality = "720"
 
     while True:
-        print("----------------------------------------")
-        print("Baha-完整連結(全部下載)或sn(單集)")
-        print("Anime1-頁面網址(全部)或(單集)")
-        print("Gimy-頁面網址(全部)或(單集)")
-        print("----------------------------------------")
-        link = input("輸入:")
+        link = input("網址:")
         if link=='exit':
             break
         linktype = Get_Link_Type(link)
