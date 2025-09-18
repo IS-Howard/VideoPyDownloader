@@ -1,4 +1,4 @@
-requests==2.31.0
+requests==2.32.5
 tqdm==4.65.0
 blinker==1.7.0
 bs4==0.0.1
