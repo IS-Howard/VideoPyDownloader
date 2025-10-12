@@ -82,7 +82,7 @@ class Gimy:
             print("title not found")
             return None, None
 
-        prefix = "https://gimy.ai" if "gimy.ai" in site else "https://gimy.su"
+        prefix = "https://gimytv.io" if "gimytv.io" in site else "https://gimy.su"
         if "vod" in site:
         # return title with all eps' links
             title = title.split('線上看')[0] #main
@@ -119,8 +119,7 @@ class Gimy:
                 links = 2
         else:
         # return single eq tile and api link
-            title = title.replace(" - Gimy 劇迷", "") #ep
-            title = title.replace("線上看","")
+            title = title.replace(" - Gimy TV 劇迷線上看", "")
             links = Get_m3u8_chunklist(site) if get_link else 1
 
         return FileNameClean(title), links
