@@ -5,6 +5,7 @@ from downloader.gimy import Gimy
 from downloader.baha import Baha
 from downloader.meiju import Meiju
 from downloader.hanju import Hanju
+from downloader.any import *
 # from downloader.animeOne import AnimeOne
 # from downloader.mmov import Mmov
 
@@ -21,9 +22,10 @@ def Get_Link_Type(link):
         return Mmov.Link_Validate(link) #mmov 0(bad) 11(sn) 12(full)
     elif link.find("321tw.com")!=-1: #hanju 0(bad) 14(full)
         return Hanju.Link_Validate(link)
+    elif link.find("ani.gamer"):
+        return Baha.Link_Validate(link) #baha 0(bad) 2(full)
     else:
-        return Baha.Link_Validate(link) #baha 0(bad) 1(sn) 2(full)
-    return 0
+        return 0 #any
 
 def Multiple_Download_Select(eps):
     try:
@@ -59,7 +61,7 @@ if __name__=='__main__':
             break
         linktype = Get_Link_Type(link)
         if linktype==0:
-            continue
+            TryGetAnyVideo(link, TMP, downloadPath0)
         if linktype==1:
             Baha.Download_Request(link, TMP, downloadPath0, Quality)
         elif linktype==2:

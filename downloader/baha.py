@@ -47,13 +47,9 @@ class Baha:
 
     def Link_Validate(link):
         linktype = 0 # bad link
-        if not link.startswith("http"):
-            link = "https://ani.gamer.com.tw/animeVideo.php?sn="+link
-            linktype = 1 # sn
-        else: # full link
-            if link.find("https://ani.gamer.com.tw/animeVideo.php?sn=")==-1:
-                return 0
-            linktype = 2
+        if link.find("https://ani.gamer.com.tw/animeVideo.php?sn=")==-1:
+            return 0
+        linktype = 2
 
         headers = Baha.headers
         response = requests.get(link, headers=headers)
