@@ -24,7 +24,7 @@ class Gimy:
         TMP = (os.getcwd()+"/Tmp").replace('\\','/')
         src_ep1 = []
         for yun in yun_all:
-            ele = yun.find_parent().find_next_sibling().find('a')
+            ele = yun.find('a')
             src_ep1.append(prefix + ele['href'])
 
         m3u8_ep1 = []
@@ -82,13 +82,13 @@ class Gimy:
             print("title not found")
             return None, None
 
-        prefix = "https://gimytv.io" if "gimytv.io" in site else "https://gimy.su"
-        if "vod" in site:
+        prefix = "https://gimy.cc"
+        if "detail" in site:
         # return title with all eps' links
-            title = title.split('線上看')[0] #main
+            title = title.split('- 陸劇線上看')[0] #main
             if get_link:
-                yun_all = soup.find_all(class_='gico')
-                yun_name = [x.text for x in yun_all]
+                yun_name = [x.text for x in soup.find_all(id="tabslist")]
+                yun_all = soup.find_all(class_='stui-content__playlist')
                 try:
                     res_check = input(f"檢查畫質(1:是 2:否): ")
                     if res_check == '1':
@@ -101,13 +101,13 @@ class Gimy:
                         print(showStr)
                     else:
                         print('\n'.join([f"{i+1}.{y}" for i, y in enumerate(yun_name, 0)]))
-                    sel = input(f"選擇來源(1~{len(yun_all)}): ")
+                    sel = input(f"選擇來源(1~{len(yun_name)}): ")
                     if not sel.strip():
                         print("未選擇來源")
                         return None, None
                     sel = int(sel)-1
                     yun = yun_all[sel]
-                    ele_list =  yun.find_parent().find_next_sibling().find_all('a')
+                    ele_list =  yun.find_all('a')
                     links = [prefix+x['href'] for x in ele_list]
                     lst = [x.get_text() for x in ele_list]
                     if sum(lst[i] >= lst[i + 1] for i in range(len(lst) - 1)) > len(lst)//2: #loose decending ordered
@@ -119,7 +119,7 @@ class Gimy:
                 links = 2
         else:
         # return single eq tile and api link
-            title = title.replace(" - Gimy TV 劇迷線上看", "")
+            title = title.split(" - ")[0]
             links = Get_m3u8_chunklist(site) if get_link else 1
 
         return FileNameClean(title), links

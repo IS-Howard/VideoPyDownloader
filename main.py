@@ -12,7 +12,7 @@ from downloader.any import *
 def Get_Link_Type(link):
     if link.find("anime1.me")!=-1: #anime1 0(bad) 3(sn) 4(full)
         return Anime1.Link_Validate(link)
-    elif link.find("gimy.su")!=-1 or link.find("gimytv.io")!=-1: #gimy 0(bad) 5(sn) 6(full)
+    elif link.find("gimy.cc")!=-1: #gimy 0(bad) 5(sn) 6(full)
         return Gimy.Link_Validate(link)
     elif link.find("anime1.one")!=-1:
         return AnimeOne.Link_Validate(link) #animeOne 0(bad) 7(sn) 8(full)
