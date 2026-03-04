@@ -1,0 +1,13 @@
+[project]
+name = "video-py-downloader"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "requests==2.32.5",
+    "tqdm==4.65.0",
+    "blinker==1.7.0",
+    "setuptools<81",
+    "bs4==0.0.1",
+    "ffmpeg-python==0.2.0",
+    "seleniumbase==4.41.6",
+]

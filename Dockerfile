@@ -24,14 +24,14 @@ RUN wget -q -O /tmp/google-chrome-stable_current_amd64.deb https://dl.google.com
 WORKDIR /app
 
 # Copy application files
-COPY requirements.txt .
+COPY pyproject.toml .
 COPY main.py .
 COPY utils.py .
 COPY downloader/ ./downloader/
 COPY Tmp/extension/ ./extension/
 
 # Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir uv && uv sync
 
 # Change ownership of app directory
 RUN chown -R appuser:appuser /app

@@ -1,10 +1,12 @@
 /Tmp/ffmpeg.exe
 /Tmp/chromedriver.exe
-/Tmp/venv
-/Video
-__pycache__
 /Tmp/Cookie1*
+/Video
+.venv
+__pycache__
+downloaded_files
 gimy
 preview
 config
 test
+*.ipynb
