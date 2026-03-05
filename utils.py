@@ -391,30 +391,43 @@ def Download_single_ts(link, TMP, filename):
         return
 
 
-def Get_Video_Resolution(file_path):
+def Get_Video_Resolution(file_path, total_chunks=None):
     try:
         if not os.path.exists(file_path):
             return {'error': 'File does not exist'}
-        
+
         file_size_bytes = os.path.getsize(file_path)
         file_size_mb = file_size_bytes / (1024 * 1024)
-        
-        # For .ts segments, estimate quality based on file size
-        # These are rough estimates for typical segment lengths (2-10 seconds)
-        
-        if file_size_mb > 5:
-            quality = "Very High (likely 1080p+ or long segment)"
-        elif file_size_mb > 2:
-            quality = "High (likely 720p-1080p)"
-        elif file_size_mb > 1:
-            quality = "Medium (likely 480p-720p)"
-        elif file_size_mb > 0.5:
-            quality = "Low-Medium (likely 360p-480p)"
+
+        if total_chunks:
+            # Scale single chunk to estimated total episode size for accurate comparison
+            # All sources cover the same video duration, so total_size is proportional to bitrate
+            estimated_total_mb = file_size_mb * total_chunks
+            if estimated_total_mb > 2000:
+                quality = "Very High (likely 1080p+)"
+            elif estimated_total_mb > 800:
+                quality = "High (likely 720p-1080p)"
+            elif estimated_total_mb > 400:
+                quality = "Medium (likely 480p-720p)"
+            elif estimated_total_mb > 150:
+                quality = "Low-Medium (likely 360p-480p)"
+            else:
+                quality = "Low (likely 240p-360p)"
         else:
-            quality = "Low (likely 240p-360p or very short)"
-        
+            # Fallback: estimate from single chunk size (rough)
+            if file_size_mb > 5:
+                quality = "Very High (likely 1080p+ or long segment)"
+            elif file_size_mb > 2:
+                quality = "High (likely 720p-1080p)"
+            elif file_size_mb > 1:
+                quality = "Medium (likely 480p-720p)"
+            elif file_size_mb > 0.5:
+                quality = "Low-Medium (likely 360p-480p)"
+            else:
+                quality = "Low (likely 240p-360p or very short)"
+
         return quality
-        
+
     except Exception as e:
         return 'error: '+str(e)
 

@@ -5,6 +5,7 @@ from downloader.gimy import Gimy
 from downloader.baha import Baha
 from downloader.meiju import Meiju
 from downloader.hanju import Hanju
+from downloader.dramasq import Dramasq
 from downloader.any import *
 # from downloader.animeOne import AnimeOne
 # from downloader.mmov import Mmov
@@ -22,6 +23,8 @@ def Get_Link_Type(link):
         return Mmov.Link_Validate(link) #mmov 0(bad) 11(sn) 12(full)
     elif link.find("321tw.com")!=-1: #hanju 0(bad) 14(full)
         return Hanju.Link_Validate(link)
+    elif "dramasq.io" in link: #dramasq 0(bad) 15(sn) 16(full)
+        return Dramasq.Link_Validate(link)
     elif link.find("ani.gamer"):
         return Baha.Link_Validate(link) #baha 0(bad) 2(full)
     else:
@@ -136,6 +139,17 @@ if __name__=='__main__':
                 st, ed = Multiple_Download_Select(eps)
                 for i in range(st,ed):
                     Hanju.Download_Request(eps[i], title+f" 第{i+1}集", TMP, downloadPath)
+            except Exception as e:
+                print("Error:", str(e))
+        elif linktype==15:
+            Dramasq.Download_Request(link, TMP, downloadPath0)
+        elif linktype==16:
+            try:
+                title, eps = Dramasq.Get_Title_Link(link)
+                downloadPath = downloadPath0 + '/' + title + '/'
+                st, ed = Multiple_Download_Select(eps)
+                for i in range(st,ed):
+                    Dramasq.Download_Request(eps[i], TMP, downloadPath)
             except Exception as e:
                 print("Error:", str(e))
         
