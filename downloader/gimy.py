@@ -1,71 +1,159 @@
 from utils import *
 from urllib.parse import urlparse
+import json
 
 class Gimy:
+    _selected_sid = None  # for gimy.com.tw batch mode (sid cookie value)
+
     def Link_Validate(site):
+        Gimy._selected_sid = None
         title, link = Gimy.Get_Title_Link(site, False)
-
         if title is None or link is None:
-            print('err: None')
             return 0
-
-        if title == '404 not found' or title == 'System Error':
-            print("err: Bad Page!")
-            return 0
-
         if link == 1:
             return 5
-
         if link == 2:
             return 6
-
         return 0
 
-    def Resolution_Check(first_eps, wait=10):
-        """Check resolution using first episode URL from each source."""
-        TMP = (os.getcwd()+"/Tmp").replace('\\','/')
-        m3u8_ep1 = []
-        for i, link in enumerate(first_eps):
-            try:
-                if DEBUG: print(f"Debug: Getting m3u8 for source {i}: {link}")
-                chunklist = Get_m3u8_chunklist(link, retry=0, retry_wait=wait)
-                if DEBUG: print(f"Debug: Got {len(chunklist)} chunks for source {i}")
-                m3u8_ep1.append(chunklist)
-            except Exception as e:
-                if DEBUG: print(f"Debug: Failed to get m3u8 for source {i}: {e}")
-                m3u8_ep1.append("")
+    def _resolve_url(base_url, path):
+        if path.startswith('http'):
+            return path
+        if path.startswith('/'):
+            p = urlparse(base_url)
+            return f"{p.scheme}://{p.netloc}{path}"
+        return '/'.join(base_url.split('/')[:-1]) + '/' + path
 
-        res = []
-        for i in range(len(m3u8_ep1)):
-            if len(m3u8_ep1[i]) > 0:
-                try:
-                    if not os.path.isdir(TMP+'/preview'):
-                        os.makedirs(TMP+'/preview')
-                    if DEBUG: print(f"Debug: Downloading chunk for source {i}: {m3u8_ep1[i][0]}")
-                    download_chunk(m3u8_ep1[i][0], i, TMP+'/preview', timeout=10, retry=1)
-                    if not os.path.isfile(TMP+'/preview/'+str(i)+'.ts'):
-                        res.append('(Invalid)')
-                        continue
-                    file_size = os.path.getsize(TMP+'/preview/'+str(i)+'.ts')
-                    if file_size == 0:
-                        res.append('(Invalid)')
-                        continue
-                    quality = Get_Video_Resolution(TMP+'/preview/'+str(i)+'.ts')
-                    res.append(f"(Resolution:{quality})")
-                except Exception as e:
-                    if DEBUG: print(f"Debug: Resolution check failed for source {i}: {e}")
-                    res.append('(Invalid)')
-            else:
-                res.append('(Invalid)')
-        return res
+    def _Get_M3u8_Url(episode_url, sid=None):
+        """Extract m3u8 URL directly via HTTP requests (no browser needed)."""
+        clean_url = episode_url.split('#')[0]
+
+        if 'gimyai.tw' in episode_url:
+            # var player_data = {..., "url": "https://...m3u8", ...}
+            r = requests.get(clean_url, headers=global_headers, timeout=15)
+            m = re.search(r'var\s+player_data\s*=\s*(\{.*?\})\s*</script>', r.content.decode('utf-8'), re.DOTALL)
+            if not m:
+                return None
+            data = json.loads(m.group(1).replace('\\/', '/'))
+            return data.get('url')
+
+        elif 'gimy.com.tw' in episode_url:
+            # Need sid cookie to select source; sid encoded in URL fragment (#sid=N)
+            if sid is None:
+                frag_m = re.search(r'sid=(\d+)', urlparse(episode_url).fragment)
+                sid = int(frag_m.group(1)) if frag_m else (Gimy._selected_sid or 1)
+            s = requests.Session()
+            s.cookies.set('sid', str(sid), domain='gimy.com.tw')
+            r = s.get(clean_url, headers=global_headers, timeout=15)
+            m = re.search(r'var\s+player_aaaa\s*=\s*(\{.*?\})\s*</script>', r.content.decode('utf-8'), re.DOTALL)
+            if not m:
+                return None
+            data = json.loads(m.group(1).replace('\\/', '/'))
+            return data.get('url')
+
+        else:
+            # gimytv.io / gimytw.cc: episode page -> /_watch/{id} iframe -> var url = '...'
+            r = requests.get(clean_url, headers=global_headers, timeout=15)
+            text = r.content.decode('utf-8')
+            watch_m = re.search(r'/_watch/(\d+)', text)
+            if not watch_m:
+                return None
+            parsed = urlparse(r.url)
+            watch_url = f"{parsed.scheme}://{parsed.netloc}/_watch/{watch_m.group(1)}"
+            r2 = requests.get(watch_url, headers=global_headers, timeout=15)
+            url_m = re.search(r"var url\s*=\s*['\"]([^'\"]+)['\"]", r2.text)
+            return url_m.group(1) if url_m else None
+
+    def _Fetch_Chunklist(m3u8_url, TMP):
+        """Fetch m3u8, resolve master playlist if needed, return chunklist."""
+        tmpPath = TMP + '/gimy'
+        if not os.path.isdir(tmpPath):
+            os.makedirs(tmpPath)
+        r = requests.get(m3u8_url, headers=global_headers, timeout=30)
+        content = r.text
+        sub_match = re.search(r'^(?!#)([^\s]+\.m3u8)', content, re.MULTILINE)
+        if sub_match:
+            sub_url = Gimy._resolve_url(m3u8_url, sub_match.group(1))
+            r2 = requests.get(sub_url, headers=global_headers, timeout=30)
+            content = r2.text
+            m3u8_url = sub_url
+        return Parse_m3u8(TMP, content, m3u8_url)
+
+    def Resolution_Check(sources, TMP):
+        """Parallel resolution check for all sources.
+        sources: list of (name, first_ep_url, sid)
+        """
+        preview_path = TMP + '/preview'
+        if not os.path.isdir(preview_path):
+            os.makedirs(preview_path)
+
+        def check_one(i, name, ep_url, sid):
+            try:
+                m3u8_url = Gimy._Get_M3u8_Url(ep_url, sid)
+                if not m3u8_url:
+                    return i, '(Invalid)'
+                r = requests.get(m3u8_url, headers=global_headers, timeout=10)
+                content = r.text
+                # Tier 1: exact resolution from master playlist RESOLUTION tag
+                res_match = re.search(r'RESOLUTION=(\d+x\d+)', content)
+                if res_match:
+                    return i, f"({res_match.group(1)})"
+                # Tier 2: resolve sub-playlist, download first chunk for size estimate
+                sub_match = re.search(r'^(?!#)([^\s]+\.m3u8)', content, re.MULTILINE)
+                if sub_match:
+                    sub_url = Gimy._resolve_url(m3u8_url, sub_match.group(1))
+                    r2 = requests.get(sub_url, headers=global_headers, timeout=10)
+                    content = r2.text
+                    m3u8_url = sub_url
+                chunk_lines = [l.strip() for l in content.split('\n') if l.strip() and not l.startswith('#')]
+                if not chunk_lines:
+                    return i, '(Invalid)'
+                total_chunks = len(chunk_lines)
+                first_chunk = Gimy._resolve_url(m3u8_url, chunk_lines[0])
+                download_chunk(first_chunk, i, preview_path, timeout=10, retry=1)
+                ts_path = f"{preview_path}/{i}.ts"
+                if not os.path.isfile(ts_path) or os.path.getsize(ts_path) == 0:
+                    return i, '(Invalid)'
+                quality = Get_Video_Resolution(ts_path, total_chunks)
+                return i, f"({quality})"
+            except Exception as e:
+                if DEBUG: print(f"Debug: Resolution check failed for source {i}: {e}")
+                return i, '(Invalid)'
+
+        results = ['(Invalid)'] * len(sources)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=len(sources)) as ex:
+            futures = [ex.submit(check_one, i, n, u, s) for i, (n, u, s) in enumerate(sources)]
+            for f in concurrent.futures.as_completed(futures):
+                i, label = f.result()
+                results[i] = label
+        return results
+
+    def _Prompt_Source(sources, TMP):
+        """Prompt user to select source with optional resolution check. Returns index."""
+        res_check = input("檢查畫質(1:是 2:否): ").strip()
+        if res_check == '1':
+            print("檢查畫質...")
+            resolutions = Gimy.Resolution_Check(sources, TMP)
+            showStr = '\n'
+            for i, (name, _, _) in enumerate(sources):
+                showStr += f"{i+1}.{name} {resolutions[i]}\n"
+            print(showStr)
+        else:
+            print('\n'.join([f"{i+1}.{s[0]}" for i, s in enumerate(sources)]))
+        sel = input(f"選擇來源(1~{len(sources)}): ").strip()
+        if not sel:
+            print("未選擇來源")
+            return None
+        return int(sel) - 1
 
     def Get_Title_Link(site, get_link=True):
-        response = requests.get(site, headers=global_headers)
-        soup = bs(response.text, 'html.parser')
-
-        # Get base URL after redirect (site may redirect to gimytv.io)
-        parsed = urlparse(response.url)
-        prefix = f"{parsed.scheme}://{parsed.netloc}"
+        TMP = (os.getcwd() + "/Tmp").replace('\\', '/')
+        response = requests.get(site.split('#')[0], headers=global_headers, timeout=15)
+        final_url = response.url
+        parsed_url = urlparse(final_url)
+        prefix = f"{parsed_url.scheme}://{parsed_url.netloc}"
+        text = response.content.decode('utf-8')
+        soup = bs(text, 'html.parser')
 
         title_tag = soup.find('title')
         title = title_tag.text if title_tag else None
@@ -73,79 +161,169 @@ class Gimy:
             print("title not found")
             return None, None
 
-        if 'voddetail' in site:
-        # Series/detail page
-            if get_link:
-                if 'voddetail2' in site:
-                    # gimytv.io: source tabs in .nav.nav-tabs, episodes in .playlist ul
-                    title = title.split(' - Gimy TV')[0].strip()
-                    yun_name = [x.get_text(strip=True) for x in soup.select('.nav.nav-tabs li a')]
-                    yun_all = soup.select('.playlist ul')
-                    first_eps = [prefix + ul.select_one('li a')['href'] for ul in yun_all if ul.select_one('li a')]
+        # === gimyai.tw: /detail/{id} series, /play/{id}-{sid}-{ep} single ===
+        if 'gimyai.tw' in final_url:
+            title = re.sub(r'\s*-\s*Gimy TV.*', '', title).strip()
 
-                    def get_links(sel):
-                        ele_list = yun_all[sel].find_all('a')
-                        links = [prefix + x['href'] for x in ele_list]
-                        lst = [x.get_text() for x in ele_list]
-                        if sum(lst[i] >= lst[i+1] for i in range(len(lst)-1)) > len(lst)//2:
-                            links.reverse()
-                        return links
-                else:
-                    # gimy.com.tw: source name in a.gico, episodes in ul li a with #sid=X
-                    title = re.sub(r'線上看.*', '', title).strip()
-                    containers = [c for c in soup.select('.playlist') if c.select_one('a.gico')]
-                    yun_name = [c.select_one('a.gico').get_text(strip=True) for c in containers]
-                    first_eps = [prefix + c.select_one('ul li a')['href'] for c in containers if c.select_one('ul li a')]
+            if '/detail/' in final_url:
+                if not get_link:
+                    return FileNameClean(title), 2
 
-                    def get_links(sel):
-                        ele_list = containers[sel].select('ul li a')
-                        links = [prefix + x['href'] for x in ele_list]
-                        lst = [x.get_text() for x in ele_list]
-                        if sum(lst[i] >= lst[i+1] for i in range(len(lst)-1)) > len(lst)//2:
-                            links.reverse()
-                        return links
-
-                try:
-                    res_check = input(f"檢查畫質(1:是 2:否): ")
-                    if res_check == '1':
-                        waitStr = input(f"重新整理時長(秒):")
-                        print("檢查畫質...")
-                        resolutions = Gimy.Resolution_Check(first_eps, int(waitStr))
-                        showStr = '\n'
-                        for i in range(len(yun_name)):
-                            showStr += f"{i+1}.{yun_name[i]} {resolutions[i]}\n"
-                        print(showStr)
-                    else:
-                        print('\n'.join([f"{i+1}.{y}" for i, y in enumerate(yun_name)]))
-                    sel = input(f"選擇來源(1~{len(yun_name)}): ")
-                    if not sel.strip():
-                        print("未選擇來源")
-                        return None, None
-                    links = get_links(int(sel)-1)
-                except Exception as e:
-                    print(str(e))
+                show_id_m = re.search(r'/detail/(\d+)', final_url)
+                if not show_id_m:
                     return None, None
-            else:
-                if 'voddetail2' in site:
-                    title = title.split(' - Gimy TV')[0].strip()
-                else:
-                    title = re.sub(r'線上看.*', '', title).strip()
-                links = 2
-        else:
-        # Single episode page (/eps/... or /video/...)
-            if '/eps/' in site:
-                title = title.split(' - Gimy TV')[0].strip()
-            else:
-                # /video/ format: "公益律師線上看第01集 | Gimy劇迷" -> "公益律師第01集"
-                title = re.sub(r'線上看', '', title).split('|')[0].strip()
-            links = Get_m3u8_chunklist(site) if get_link else 1
+                show_id = show_id_m.group(1)
 
-        return FileNameClean(title), links
+                # Group episode links by sid: /play/{show_id}-{sid}-{nid}.html
+                eps_by_sid = {}
+                for a in soup.select(f'a[href*="/play/{show_id}-"]'):
+                    m = re.match(r'/play/\d+-(\d+)-(\d+)\.html', a['href'])
+                    if m:
+                        sid, nid = int(m.group(1)), int(m.group(2))
+                        if sid not in eps_by_sid:
+                            eps_by_sid[sid] = {}
+                        eps_by_sid[sid][nid] = prefix + a['href']
+
+                # Build sources from nav-tabs (or from eps_by_sid keys if no tabs)
+                tabs = soup.select('.nav.nav-tabs li a')
+                if tabs:
+                    sources = []
+                    for t in tabs:
+                        sid_m = re.search(r'con_playlist_(\d+)', t.get('href', ''))
+                        if sid_m:
+                            sid = int(sid_m.group(1))
+                            if sid in eps_by_sid:
+                                first_nid = sorted(eps_by_sid[sid].keys())[0]
+                                sources.append((t.get_text(strip=True), eps_by_sid[sid][first_nid], sid))
+                else:
+                    sources = [(f'來源{sid}', eps[sorted(eps.keys())[0]], sid)
+                               for sid, eps in sorted(eps_by_sid.items())]
+
+                if not sources:
+                    print("No sources found")
+                    return None, None
+
+                if len(sources) == 1:
+                    sel_idx = 0
+                else:
+                    sel_idx = Gimy._Prompt_Source(sources, TMP)
+                if sel_idx is None:
+                    return None, None
+
+                _, _, sel_sid = sources[sel_idx]
+                Gimy._selected_sid = sel_sid
+                links = [eps_by_sid[sel_sid][nid] for nid in sorted(eps_by_sid[sel_sid].keys())]
+                return FileNameClean(title), links
+
+            else:
+                # /play/{id}-{sid}-{nid}.html
+                if not get_link:
+                    return FileNameClean(title), 1
+                m3u8_url = Gimy._Get_M3u8_Url(site)
+                if not m3u8_url:
+                    return None, None
+                return FileNameClean(title), Gimy._Fetch_Chunklist(m3u8_url, TMP)
+
+        # === gimy.com.tw: /voddetail/{id} series, /video/{id}-{ep}[#sid=N] single ===
+        elif 'gimy.com.tw' in final_url:
+            if 'voddetail' in final_url:
+                title = re.sub(r'線上看.*', '', title).strip()
+                if not get_link:
+                    return FileNameClean(title), 2
+
+                containers = [c for c in soup.select('.playlist') if c.select_one('a.gico')]
+                sources = []
+                for c in containers:
+                    name = c.select_one('a.gico').get_text(strip=True)
+                    ul = c.find('ul', id=re.compile(r'con_playlist_\d+'))
+                    if not ul:
+                        continue
+                    sid_m = re.search(r'con_playlist_(\d+)', ul.get('id', ''))
+                    if not sid_m:
+                        continue
+                    sid = int(sid_m.group(1))
+                    first_a = ul.select_one('li a')
+                    if first_a:
+                        sources.append((name, prefix + first_a['href'], sid))
+
+                if not sources:
+                    print("No sources found")
+                    return None, None
+
+                if len(sources) == 1:
+                    sel_idx = 0
+                else:
+                    sel_idx = Gimy._Prompt_Source(sources, TMP)
+                if sel_idx is None:
+                    return None, None
+
+                Gimy._selected_sid = sources[sel_idx][2]
+                sel_container = containers[sel_idx]
+                ele_list = sel_container.select('ul li a')
+                links = [prefix + x['href'] for x in ele_list]
+                lst = [x.get_text() for x in ele_list]
+                if len(lst) > 1 and sum(lst[i] >= lst[i+1] for i in range(len(lst)-1)) > len(lst)//2:
+                    links.reverse()
+                return FileNameClean(title), links
+
+            else:
+                # /video/{id}-{ep}.html[#sid=N]
+                title = re.sub(r'線上看', '', title).split('|')[0].strip()
+                if not get_link:
+                    return FileNameClean(title), 1
+                m3u8_url = Gimy._Get_M3u8_Url(site)
+                if not m3u8_url:
+                    return None, None
+                return FileNameClean(title), Gimy._Fetch_Chunklist(m3u8_url, TMP)
+
+        # === gimytv.io / gimytw.cc: /voddetail2/{id} series, /eps/{id}-{ep} single ===
+        else:
+            if 'voddetail2' in site or 'voddetail2' in final_url:
+                title = title.split(' - Gimy TV')[0].strip()
+                if not get_link:
+                    return FileNameClean(title), 2
+
+                yun_name = [x.get_text(strip=True) for x in soup.select('.nav.nav-tabs li a')]
+                yun_all = soup.select('.playlist ul')
+
+                sources = []
+                for i, ul in enumerate(yun_all):
+                    first_a = ul.select_one('li a')
+                    if first_a:
+                        name = yun_name[i] if i < len(yun_name) else f'來源{i+1}'
+                        sources.append((name, prefix + first_a['href'], None))
+
+                if not sources:
+                    print("No sources found")
+                    return None, None
+
+                if len(sources) == 1:
+                    sel_idx = 0
+                else:
+                    sel_idx = Gimy._Prompt_Source(sources, TMP)
+                if sel_idx is None:
+                    return None, None
+
+                ele_list = yun_all[sel_idx].find_all('a')
+                links = [prefix + x['href'] for x in ele_list]
+                lst = [x.get_text() for x in ele_list]
+                if len(lst) > 1 and sum(lst[i] >= lst[i+1] for i in range(len(lst)-1)) > len(lst)//2:
+                    links.reverse()
+                return FileNameClean(title), links
+
+            else:
+                # /eps/{id}-{ep}.html
+                title = title.split(' - Gimy TV')[0].strip()
+                if not get_link:
+                    return FileNameClean(title), 1
+                m3u8_url = Gimy._Get_M3u8_Url(site)
+                if not m3u8_url:
+                    return None, None
+                return FileNameClean(title), Gimy._Fetch_Chunklist(m3u8_url, TMP)
 
     def Download_Request(site, TMP, downloadPath, max_threads=15):
-        #path
-        tmpPath = TMP+'/gimy'
-        tmpfile = tmpPath+'/0.m3u8'
+        tmpPath = TMP + '/gimy'
+        tmpfile = tmpPath + '/0.m3u8'
         if not os.path.isdir(tmpPath):
             os.makedirs(tmpPath)
         if not os.path.isdir(downloadPath):
@@ -160,10 +338,8 @@ class Gimy:
 
         Download_Chunks(chunks, TMP)
 
-        #ffmpeg convert
-        if MP4convert(tmpfile, downloadPath +'/'+ title + ".mp4"):
+        if MP4convert(tmpfile, downloadPath + '/' + title + ".mp4"):
             return False
 
-        #remove tmp files
         shutil.rmtree(tmpPath)
         return True
