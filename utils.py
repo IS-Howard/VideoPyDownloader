@@ -30,7 +30,50 @@ global_headers = {
 def Get_m3u8_chunklist(link, retry=3, retry_wait=30, TMP='./Tmp'):
     driver = Driver(headless2=True, wire=True)
     driver.open(link)
-    
+
+    # Fast path: extract m3u8 URL from player_aaaa JS variable (common CMS pattern)
+    # Wait for JS to execute and potentially switch source based on URL fragment
+    time.sleep(5)
+    try:
+        player_url = driver.execute_script('if (typeof player_aaaa !== "undefined") return player_aaaa.url; return null;')
+        if player_url and '.m3u8' in player_url:
+            if DEBUG: print(f"Debug: Got m3u8 URL from player_aaaa: {player_url}")
+            # Quit driver before fetching — avoids wire proxy interference
+            driver.quit()
+            response = requests.get(player_url, timeout=30, headers=global_headers)
+            if response.status_code == 200:
+                m3u8_text = response.text
+                m3u8_url = player_url
+                # Handle master playlist: resolve sub-playlist if present
+                sub_match = re.search(r'^(?!#)([^\s]+\.m3u8)', m3u8_text, re.MULTILINE)
+                if sub_match:
+                    sub_path = sub_match.group(1)
+                    if sub_path.startswith('http'):
+                        sub_url = sub_path
+                    elif sub_path.startswith('/'):
+                        # Absolute path — use domain origin
+                        from urllib.parse import urlparse as _urlparse
+                        _p = _urlparse(player_url)
+                        sub_url = f"{_p.scheme}://{_p.netloc}{sub_path}"
+                    else:
+                        base = '/'.join(player_url.split('/')[:-1])
+                        sub_url = base + '/' + sub_path
+                    sub_r = requests.get(sub_url, timeout=30, headers=global_headers)
+                    if sub_r.status_code == 200:
+                        m3u8_text = sub_r.text
+                        m3u8_url = sub_url
+                return Parse_m3u8(TMP, m3u8_text, m3u8_url)
+            return []
+        # player_aaaa not present — fall through to wire mode below
+    except Exception as e:
+        if DEBUG: print(f"Debug: player_aaaa extraction failed: {e}")
+        # driver may be dead; wire mode fallback won't work, give up
+        try:
+            driver.quit()
+        except:
+            pass
+        return []
+
     start_time=time.time()
     retries = 0
     target = None
