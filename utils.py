@@ -240,9 +240,14 @@ def decompress_and_decode(body):
         except:
             return str(body)
 
-def download_chunk(chunk, index, savepath, progress_bar=None, lock=None, showerr=True, timeout=60, retry=5):
+def download_chunk(chunk, index, savepath, progress_bar=None, lock=None, showerr=True, timeout=60, retry=5, cancel_event=None, fail_counter=None, max_failures=None):
+    if cancel_event and cancel_event.is_set():
+        return
+
     retries = 0
     while retries < retry:
+        if cancel_event and cancel_event.is_set():
+            return
         try:
             response = requests.get(chunk, stream=True, timeout=timeout, headers=global_headers)
             if response.status_code == 200:
@@ -255,42 +260,58 @@ def download_chunk(chunk, index, savepath, progress_bar=None, lock=None, showerr
                     print(f"Failed to download chunk {index}. Status code: {response.status_code}, Retrying...")
                 retries += 1
                 continue
-                
+
             if progress_bar:
                 with lock:
                     progress_bar.update(1)
-                    
+
             # If download is successful, break the retry loop
             break
-        
+
         except requests.Timeout:
             if showerr:
                 print(f"Timeout error downloading chunk {index}. Retrying...")
             retries += 1
             time.sleep(1)
-        
+
         except Exception as e:
             print(f"Error downloading chunk {index}: {str(e)}")
             retries += 1
             continue
-    if retries == 5:
-        print(f"Failed to download chunk {index}. Retried 5 times, giving up.")
 
-def Download_Chunks(chunklist, TMP, max_threads=15):
+    if retries >= retry:
+        print(f"Failed to download chunk {index}. Retried {retry} times, giving up.")
+        if fail_counter is not None and cancel_event is not None and max_failures is not None:
+            with lock:
+                fail_counter[0] += 1
+                count = fail_counter[0]
+            if count >= max_failures:
+                print(f"Too many failed chunks ({count}), aborting download.")
+                cancel_event.set()
+
+def Download_Chunks(chunklist, TMP, max_threads=15, max_failures=15):
     tmpPath = TMP+'/gimy'
-    tmpfile = tmpPath+'/0.m3u8'
+    cancel_event = threading.Event()
+    fail_counter = [0]
+
     with concurrent.futures.ThreadPoolExecutor(max_threads) as executor:
         total_chunks = len(chunklist)
         progress_bar = tqdm(total=total_chunks, desc="Download Progress", unit="chunk")
+        lock = threading.Lock()
 
-        lock = threading.Lock() # Mutex lock for updating the progress bar
+        futures = [
+            executor.submit(download_chunk, chunk_url, index, tmpPath, progress_bar, lock,
+                            True, 60, 5, cancel_event, fail_counter, max_failures)
+            for index, chunk_url in enumerate(chunklist)
+        ]
 
-        for index, chunk_url in enumerate(chunklist):
-            executor.submit(lambda url=chunk_url, index=index: download_chunk(url, index, tmpPath, progress_bar, lock))
-
-        # Wait for all tasks to complete
-        executor.shutdown()
+        executor.shutdown(wait=True, cancel_futures=False)
         progress_bar.close()
+
+    if cancel_event.is_set():
+        print("Download aborted.")
+        return True  # aborted
+    return False  # success
 
 def MP4convert(m3u8_file, mp4_file):
     print("mp4 generating..")

@@ -248,7 +248,8 @@ class Mmov:
             return False
         print(title)
 
-        Download_Chunks(chunks, TMP)
+        if Download_Chunks(chunks, TMP):
+            return False
 
         if MP4convert(tmpfile, downloadPath + '/' + title + '.mp4'):
             return False

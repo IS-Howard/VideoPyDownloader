@@ -46,7 +46,8 @@ class Meiju:
         chunks = Get_m3u8_chunklist(link)
 
         print(title)
-        Download_Chunks(chunks, TMP)
+        if Download_Chunks(chunks, TMP):
+            return False
 
         #ffmpeg convert
         if MP4convert(tmpfile, downloadPath +'/'+ title + ".mp4"):
