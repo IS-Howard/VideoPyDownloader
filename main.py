@@ -7,7 +7,7 @@ from downloader.meiju import Meiju
 from downloader.hanju import Hanju
 from downloader.dramasq import Dramasq
 from downloader.any import *
-# from downloader.animeOne import AnimeOne
+from downloader.animeOne import AnimeOne
 from downloader.mmov import Mmov
 
 def Get_Link_Type(link):
@@ -100,16 +100,14 @@ if __name__=='__main__':
             except Exception as e:
                 print("Error:", str(e))
         elif linktype==7:
-            sel = int(input(f"選擇分流(1~5): "))
-            AnimeOne.Download_Request(link,TMP,downloadPath0, sel)
+            AnimeOne.Download_Request(link, TMP, downloadPath0)
         elif linktype==8:
             title, eps = AnimeOne.Get_Title_Link(link)
             downloadPath = downloadPath0 + '/' + title + '/'
             try:
                 st, ed = Multiple_Download_Select(eps)
-                sel = int(input(f"選擇分流(1~5): "))
                 for i in range(st,ed):
-                    AnimeOne.Download_Request(eps[i], TMP, downloadPath, sel)
+                    AnimeOne.Download_Request(eps[i], TMP, downloadPath)
             except Exception as e:
                 print("Error:", str(e))
         elif linktype==10:
