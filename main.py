@@ -8,7 +8,7 @@ from downloader.hanju import Hanju
 from downloader.dramasq import Dramasq
 from downloader.any import *
 # from downloader.animeOne import AnimeOne
-# from downloader.mmov import Mmov
+from downloader.mmov import Mmov
 
 def Get_Link_Type(link):
     if link.find("anime1.me")!=-1: #anime1 0(bad) 3(sn) 4(full)
