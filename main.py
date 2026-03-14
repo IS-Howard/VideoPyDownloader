@@ -6,6 +6,7 @@ from downloader.baha import Baha
 from downloader.meiju import Meiju
 from downloader.hanju import Hanju
 from downloader.dramasq import Dramasq
+from downloader.movieffm import MovieFFM
 from downloader.any import *
 from downloader.animeOne import AnimeOne
 from downloader.mmov import Mmov
@@ -25,6 +26,8 @@ def Get_Link_Type(link):
         return Hanju.Link_Validate(link)
     elif "dramasq.io" in link: #dramasq 0(bad) 15(sn) 16(full)
         return Dramasq.Link_Validate(link)
+    elif "movieffm.net" in link: #movieffm 0(bad) 18(full)
+        return MovieFFM.Link_Validate(link)
     elif link.find("ani.gamer"):
         return Baha.Link_Validate(link) #baha 0(bad) 2(full)
     else:
@@ -148,6 +151,15 @@ if __name__=='__main__':
                 st, ed = Multiple_Download_Select(eps)
                 for i in range(st,ed):
                     Dramasq.Download_Request(eps[i], TMP, downloadPath)
+            except Exception as e:
+                print("Error:", str(e))
+        elif linktype==18:
+            try:
+                title, eps = MovieFFM.Get_Title_Link(link)
+                downloadPath = downloadPath0 + '/' + title + '/'
+                st, ed = Multiple_Download_Select(eps)
+                for i in range(st,ed):
+                    MovieFFM.Download_Request(eps[i], title+f" EP{i+1}", TMP, downloadPath)
             except Exception as e:
                 print("Error:", str(e))
         
