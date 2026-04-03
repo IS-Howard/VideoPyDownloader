@@ -259,10 +259,13 @@ class Yanetflix:
 
         elif '/play/' in site:
             # Single play page: /play/{id}-{sid}-{ep}.html
-            # Title: "奈飞工厂热门{type}-《{name}》{ep_num} - ..."
-            m = re.search(r'《(.+?)》', raw_title)
+            # Title: "奈飞工厂热门{type}-《{name}》第01集 - ..." or "...《{name}》HD中字 - ..."
+            m = re.search(r'《(.+?)》(.*?)\s*-\s*奈飞工厂', raw_title)
             if m:
                 title = m.group(1)
+                ep_suffix = m.group(2).strip()
+                if ep_suffix and re.search(r'第\d+集', ep_suffix):
+                    title = title + ' ' + ep_suffix
             else:
                 title = re.sub(r'[_\s]*[-–]?\s*奈飞工厂.*', '', raw_title).strip()
 
