@@ -139,6 +139,30 @@ class MovieFFM:
                 results[i] = label
         return results
 
+    def _handle_tvshow_page(soup, site):
+        """Handle /tvshows/ pages: extract season links, prompt user, return chosen /drama/ URL."""
+        season_links = [a['href'] for a in soup.select('a[href*="/drama/"]')
+                        if re.search(r'/drama/\d+/', a.get('href', ''))]
+        if not season_links:
+            return None
+        # Deduplicate while preserving order
+        seen = set()
+        unique = []
+        for link in season_links:
+            if link not in seen:
+                seen.add(link)
+                unique.append(link)
+        season_links = unique
+
+        if len(season_links) == 1:
+            return season_links[0]
+
+        print('\n'.join([f"{i+1}. Season {i+1}" for i in range(len(season_links))]))
+        sel = input(f"選擇季數(1~{len(season_links)}): ").strip()
+        if not sel:
+            return None
+        return season_links[int(sel) - 1]
+
     def Get_Title_Link(site, get_link=True):
         r = requests.get(site, headers=global_headers, timeout=15)
         html = r.content.decode('utf-8')
@@ -158,6 +182,26 @@ class MovieFFM:
 
         TMP = (os.getcwd() + "/Tmp").replace('\\', '/')
         videourls, tables = MovieFFM._Parse_Vue_Data(html)
+
+        # /tvshows/ pages have no player — redirect to a /drama/ season page
+        if videourls is None and '/tvshows/' in site:
+            drama_url = MovieFFM._handle_tvshow_page(soup, site)
+            if not drama_url:
+                print("No seasons found")
+                return None, None
+            r2 = requests.get(drama_url, headers=global_headers, timeout=15)
+            html = r2.content.decode('utf-8')
+            soup = bs(html, 'html.parser')
+            # Update title from season page
+            title_tag = soup.find('title')
+            if title_tag:
+                raw_title = title_tag.get_text()
+                t = re.sub(r'\s*[-|]\s*MovieFFM.*', '', raw_title, flags=re.IGNORECASE).strip()
+                t = FileNameClean(t)
+                if t:
+                    title = t
+            videourls, tables = MovieFFM._Parse_Vue_Data(html)
+
         if videourls is None:
             print("No video sources found")
             return None, None
