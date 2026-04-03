@@ -27,19 +27,46 @@ class MovieFFM:
         return None
 
     def _Parse_Vue_Data(html):
-        """Extract videourls and tables from inline Vue script. Returns (videourls, tables) or (None, None)."""
-        # Find script block containing the Vue app
-        m = re.search(r"new Vue\(\{[\s\S]*?el:\s*['\"]#dooplay_player['\"][\s\S]*?\}\)", html)
+        """Extract videourls and tables from inline Vue script. Returns (videourls, tables) or (None, None).
+        Supports both old format (nested videourls + tables) and new flat format (flat list with source/ep keys)."""
+        m = re.search(r"new Vue\(\{[\s\S]*?el:\s*['\"]#(?:dooplay_player|playcontainer)['\"][\s\S]*?\}\)", html)
         if not m:
             return None, None
         script = m.group(0)
 
         vu_raw = MovieFFM._extract_json_array(script, 'videourls')
+        if not vu_raw:
+            return None, None
+
+        try:
+            vu_parsed = json.loads(vu_raw)
+        except json.JSONDecodeError:
+            return None, None
+
+        # New flat format: [{source: int, url: str, type: str, ep: int}, ...]
+        if vu_parsed and isinstance(vu_parsed[0], dict) and 'source' in vu_parsed[0]:
+            # Group by source index
+            by_source = {}
+            for item in vu_parsed:
+                s = item['source']
+                if s not in by_source:
+                    by_source[s] = []
+                by_source[s].append(item)
+            # Sort each source's episodes by ep number
+            videourls = []
+            tables = []
+            for s in sorted(by_source.keys()):
+                eps = sorted(by_source[s], key=lambda x: x.get('ep', 0))
+                videourls.append(eps)
+                tables.append({'ht': f'Source {s+1}'})
+            return videourls, tables
+
+        # Old nested format: videourls is list of lists, tables is separate
         tb_raw = MovieFFM._extract_json_array(script, 'tables')
-        if not vu_raw or not tb_raw:
+        if not tb_raw:
             return None, None
         try:
-            return json.loads(vu_raw), json.loads(tb_raw)
+            return vu_parsed, json.loads(tb_raw)
         except json.JSONDecodeError:
             return None, None
 
