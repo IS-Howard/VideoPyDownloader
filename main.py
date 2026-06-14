@@ -107,6 +107,8 @@ def run_download(link, TMP, downloadPath0, Quality, arg_start=None, arg_end=None
         Gimy.Download_Request(link, TMP, downloadPath0)
     elif linktype == 6:
         title, eps = Gimy.Get_Title_Link(link)
+        if title is None or eps is None:
+            return
         downloadPath = downloadPath0 + '/' + title + '/'
         try:
             st, ed = ep_select(eps)
@@ -148,6 +150,8 @@ def run_download(link, TMP, downloadPath0, Quality, arg_start=None, arg_end=None
     elif linktype == 14:
         try:
             title, eps = Hanju.Get_Title_Link(link)
+            if title is None or eps is None:
+                return
             downloadPath = downloadPath0 + '/' + title + '/'
             st, ed = ep_select(eps)
             for i in range(st, ed):
@@ -159,6 +163,8 @@ def run_download(link, TMP, downloadPath0, Quality, arg_start=None, arg_end=None
     elif linktype == 16:
         try:
             title, eps = Dramasq.Get_Title_Link(link)
+            if title is None or eps is None:
+                return
             downloadPath = downloadPath0 + '/' + title + '/'
             st, ed = ep_select(eps)
             for i in range(st, ed):
@@ -168,6 +174,8 @@ def run_download(link, TMP, downloadPath0, Quality, arg_start=None, arg_end=None
     elif linktype == 18:
         try:
             title, eps = MovieFFM.Get_Title_Link(link)
+            if title is None or eps is None:
+                return
             downloadPath = downloadPath0 + '/' + title + '/'
             st, ed = ep_select(eps)
             for i in range(st, ed):
@@ -179,6 +187,8 @@ def run_download(link, TMP, downloadPath0, Quality, arg_start=None, arg_end=None
     elif linktype == 20:
         try:
             title, eps = Yanetflix.Get_Title_Link(link)
+            if title is None or eps is None:
+                return
             downloadPath = downloadPath0 + '/' + title + '/'
             st, ed = ep_select(eps)
             for i in range(st, ed):
@@ -200,10 +210,14 @@ if __name__ == '__main__':
     parser.add_argument("--all", dest="all", action="store_true", help="下載全部集數")
     parser.add_argument("--start", dest="start", type=int, default=None, metavar="N", help="從第 N 集開始 (1-based)")
     parser.add_argument("--end",   dest="end",   type=int, default=None, metavar="N", help="下載到第 N 集 (inclusive)")
+    parser.add_argument("--source", dest="source", type=int, default=None, metavar="N", help="指定來源序號 (1-based)；未指定時列出可用來源後停止")
     args = parser.parse_args()
 
     if args.url:
-        # One-shot mode: download the supplied URL and exit
+        # One-shot mode: pre-set source selection on all modules that prompt for it
+        cli_src = (args.source - 1) if args.source is not None else -1
+        for M in [Dramasq, Gimy, Yanetflix, MovieFFM, Hanju]:
+            M._cli_source_idx = cli_src
         run_download(args.url, TMP, downloadPath0, Quality,
                      arg_start=args.start, arg_end=args.end, arg_all=args.all)
     else:

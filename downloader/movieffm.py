@@ -2,6 +2,7 @@ from utils import *
 
 class MovieFFM:
     _selected_source_idx = None
+    _cli_source_idx = None  # -1=list+stop, >=0=pre-selected (set by CLI before download)
 
     def Link_Validate(site):
         MovieFFM._selected_source_idx = None
@@ -220,21 +221,33 @@ class MovieFFM:
             return None, None
 
         if MovieFFM._selected_source_idx is None:
-            res_check = input("檢查畫質(1:是 2:否): ").strip()
-            if res_check == '1':
-                print("檢查畫質...")
-                resolutions = MovieFFM.Resolution_Check(sources, TMP)
-                showStr = '\n'
-                for i, s in enumerate(sources):
-                    showStr += f"{i+1}.{s[0]} ({s[1]}集) {resolutions[i]}\n"
-                print(showStr)
-            else:
+            if MovieFFM._cli_source_idx == -1:
                 print('\n'.join([f"{i+1}.{s[0]} ({s[1]}集)" for i, s in enumerate(sources)]))
-            sel = input(f"選擇來源(1~{len(sources)}): ").strip()
-            if not sel:
-                print("未選擇來源")
+                print("請使用 --source N 指定來源")
                 return None, None
-            MovieFFM._selected_source_idx = int(sel) - 1
+            elif MovieFFM._cli_source_idx is not None:
+                idx = MovieFFM._cli_source_idx
+                if idx >= len(sources):
+                    print(f"來源 {idx+1} 超出範圍 (共 {len(sources)} 個)")
+                    return None, None
+                print(f"使用來源: {sources[idx][0]}")
+                MovieFFM._selected_source_idx = idx
+            else:
+                res_check = input("檢查畫質(1:是 2:否): ").strip()
+                if res_check == '1':
+                    print("檢查畫質...")
+                    resolutions = MovieFFM.Resolution_Check(sources, TMP)
+                    showStr = '\n'
+                    for i, s in enumerate(sources):
+                        showStr += f"{i+1}.{s[0]} ({s[1]}集) {resolutions[i]}\n"
+                    print(showStr)
+                else:
+                    print('\n'.join([f"{i+1}.{s[0]} ({s[1]}集)" for i, s in enumerate(sources)]))
+                sel = input(f"選擇來源(1~{len(sources)}): ").strip()
+                if not sel:
+                    print("未選擇來源")
+                    return None, None
+                MovieFFM._selected_source_idx = int(sel) - 1
 
         idx = MovieFFM._selected_source_idx
         m3u8_urls = sources[idx][2]

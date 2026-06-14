@@ -3,6 +3,7 @@ import json
 
 class Dramasq:
     _selected_source_name = None  # src_site string, stable across episodes
+    _cli_source_idx = None  # -1=list+stop, >=0=pre-selected (set by CLI before download)
 
     def Link_Validate(site):
         Dramasq._selected_source_name = None  # reset for each new URL
@@ -94,6 +95,17 @@ class Dramasq:
 
     def _Prompt_Source(sources, TMP):
         """Show source list, optionally with resolution check, return selected index."""
+        if Dramasq._cli_source_idx == -1:
+            print('\n'.join([f"{i+1}.{s[0]}" for i, s in enumerate(sources)]))
+            print("請使用 --source N 指定來源")
+            return None
+        if Dramasq._cli_source_idx is not None:
+            idx = Dramasq._cli_source_idx
+            if idx >= len(sources):
+                print(f"來源 {idx+1} 超出範圍 (共 {len(sources)} 個)")
+                return None
+            print(f"使用來源: {sources[idx][0]}")
+            return sources[idx][0]
         res_check = input("檢查畫質(1:是 2:否): ").strip()
         if res_check == '1':
             print("檢查畫質...")

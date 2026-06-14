@@ -5,6 +5,7 @@ import json
 
 class Yanetflix:
     _selected_sid = None  # source sid for batch mode
+    _cli_source_idx = None  # -1=list+stop, >=0=pre-selected (set by CLI before download)
 
     # Sources with these 'from' values return encrypted tokens, not direct m3u8
     _UNUSABLE_SOURCES = {'NBY', 'KMQP', 'kemi', 'Netflix'}
@@ -148,6 +149,17 @@ class Yanetflix:
 
     def _Prompt_Source(sources, TMP):
         """Prompt user to select source with optional resolution check. Returns sid."""
+        if Yanetflix._cli_source_idx == -1:
+            print('\n'.join([f"{i+1}.{s[0]}" for i, s in enumerate(sources)]))
+            print("請使用 --source N 指定來源")
+            return None
+        if Yanetflix._cli_source_idx is not None:
+            idx = Yanetflix._cli_source_idx
+            if idx >= len(sources):
+                print(f"來源 {idx+1} 超出範圍 (共 {len(sources)} 個)")
+                return None
+            print(f"使用來源: {sources[idx][0]}")
+            return idx
         res_check = input("檢查畫質(1:是 2:否): ").strip()
         if res_check == '1':
             print("檢查畫質...")

@@ -1,6 +1,8 @@
 from utils import *
 
 class Hanju:
+    _cli_source_idx = None  # -1=list+stop, >=0=pre-selected (set by CLI before download)
+
     def Link_Validate(site):
         if "content" in site:
             return 0
@@ -22,8 +24,18 @@ class Hanju:
             return "", []
         
         yun_all = soup.find_all('div', class_='list')
-        sel = input(f"選擇來源(1~{len(yun_all)}): ")
-        sel = int(sel)-1
+        if Hanju._cli_source_idx == -1:
+            print('\n'.join([f"{i+1}.來源{i+1}" for i in range(len(yun_all))]))
+            print("請使用 --source N 指定來源")
+            return None, None
+        elif Hanju._cli_source_idx is not None:
+            sel = Hanju._cli_source_idx
+            if sel >= len(yun_all):
+                print(f"來源 {sel+1} 超出範圍 (共 {len(yun_all)} 個)")
+                return None, None
+            print(f"使用來源: 來源{sel+1}")
+        else:
+            sel = int(input(f"選擇來源(1~{len(yun_all)}): ")) - 1
         yun = yun_all[sel]
         links = ["https://321tw.com"+ep.get('href') for ep in yun.select('a')]
 
