@@ -214,6 +214,11 @@ class MovieFFM:
                 break
             name = re.sub(r'<[^>]+>', '', tbl.get('ht', f'Source {i+1}')).strip()
             eps = videourls[i]
+            # Some sources serialize episodes as a dict keyed by sparse string
+            # indices ('0','2','4',...) instead of a list — normalize to a list
+            # ordered by numeric key.
+            if isinstance(eps, dict):
+                eps = [eps[k] for k in sorted(eps, key=lambda x: int(x))]
             sources.append((name, len(eps), [e['url'] for e in eps]))
 
         if not sources:
