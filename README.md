@@ -1,6 +1,6 @@
 # 簡介
 
-影片下載工具 For [動畫瘋](https://ani.gamer.com.tw/), [Anime1](https://anime1.me/), [Gimy](https://gimy.ai/)
+影片下載工具 For [動畫瘋](https://ani.gamer.com.tw/), [Anime1](https://anime1.me/), [Anime1.in](https://anime1.in/), [Gimy](https://gimy.ai/)
 
 
 

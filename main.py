@@ -11,6 +11,7 @@ from downloader.movieffm import MovieFFM
 from downloader.yanetflix import Yanetflix
 from downloader.any import *
 from downloader.animeOne import AnimeOne
+from downloader.anime1in import Anime1in
 from downloader.mmov import Mmov
 
 def Get_Link_Type(link):
@@ -20,6 +21,8 @@ def Get_Link_Type(link):
         return Gimy.Link_Validate(link)
     elif link.find("anime1.one")!=-1:
         return AnimeOne.Link_Validate(link) #animeOne 0(bad) 7(sn) 8(full)
+    elif link.find("anime1.in")!=-1:
+        return Anime1in.Link_Validate(link) #anime1in 0(bad) 21(sn) 22(full)
     elif link.find("meiju")!=-1:
         return Meiju.Link_Validate(link) #meiju 0(bad) 10(full)
     elif link.find("mmov")!=-1:
@@ -180,6 +183,17 @@ def run_download(link, TMP, downloadPath0, Quality, arg_start=None, arg_end=None
             st, ed = ep_select(eps)
             for i in range(st, ed):
                 MovieFFM.Download_Request(eps[i], title + f" EP{i+1}", TMP, downloadPath)
+        except Exception as e:
+            print("Error:", str(e))
+    elif linktype == 21:
+        Anime1in.Download_Request(link, TMP, downloadPath0)
+    elif linktype == 22:
+        title, eps = Anime1in.Get_Title_Link(link)
+        downloadPath = downloadPath0 + '/' + title + '/'
+        try:
+            st, ed = ep_select(eps)
+            for i in range(st, ed):
+                Anime1in.Download_Request(eps[i], TMP, downloadPath)
         except Exception as e:
             print("Error:", str(e))
     elif linktype == 19:
